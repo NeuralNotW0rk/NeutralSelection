@@ -1,15 +1,13 @@
-from typing import TypeVar, Generic, Callable
-
-G = TypeVar("G")  # Genotype type (e.g., ContiguousArrayGenome, SegmentedGenome)
-P = TypeVar("P")  # Phenotype type (e.g., domain-specific grating or model)
+from typing import Callable, Any
+from neutral_selection.representation.genome import Genome
 
 
-class Individual(Generic[G, P]):
-    """Represents an individual in the population, wrapping a genotype G and managing its expression into a phenotype P."""
+class Individual:
+    """Represents an individual in the population, wrapping a genotype and managing its expression into a phenotype."""
 
-    def __init__(self, genotype: G) -> None:
-        self.genotype: G = genotype
-        self._phenotype: P | None = None
+    def __init__(self, genotype: Genome) -> None:
+        self.genotype: Genome = genotype
+        self._phenotype: Any = None
         self.fitness: float | None = None
 
     @property
@@ -18,7 +16,7 @@ class Individual(Generic[G, P]):
         return self._phenotype is not None
 
     @property
-    def phenotype(self) -> P:
+    def phenotype(self) -> Any:
         """
         Returns the cached phenotype expression.
         Raises a ValueError if express() has not been called yet.
@@ -27,9 +25,9 @@ class Individual(Generic[G, P]):
             raise ValueError("Phenotype has not been expressed yet. Call express() first.")
         return self._phenotype
 
-    def express(self, decode_fn: Callable[[G], P]) -> P:
+    def express(self, decode_fn: Callable[[Genome], Any]) -> Any:
         """
-        Translates the genotype into the domain-specific phenotype P using decode_fn.
+        Translates the genotype into the domain-specific phenotype using decode_fn.
         Caches the resulting phenotype internally.
         """
         if decode_fn is None:

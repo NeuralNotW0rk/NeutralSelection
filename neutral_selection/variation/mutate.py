@@ -1,13 +1,13 @@
-from typing import TypeVar, Any, Generic
-from neutral_selection.representation.genome import MutationFn
-
-T = TypeVar("T")
+from typing import Callable, Any
+from neutral_selection.representation.genome import Genome, Segment
 
 
-class UniformMutation(Generic[T]):
-    """A structure-agnostic mutation strategy that maps mutation_fn across elements using map."""
+class UniformMutation:
+    """
+    A structure-agnostic mutation strategy that maps a mutation function across elements recursively.
+    """
 
-    def __init__(self, mutation_rate: float, mutation_fn: MutationFn[T]) -> None:
+    def __init__(self, mutation_rate: float, mutation_fn: Callable[[Any], Any]) -> None:
         if mutation_fn is None:
             raise ValueError("mutation_fn must be provided and cannot be None.")
         if not callable(mutation_fn):
@@ -19,13 +19,18 @@ class UniformMutation(Generic[T]):
         self.mutation_rate = float(mutation_rate)
         self.mutation_fn = mutation_fn
 
-    def __call__(self, genome: Any) -> Any:
-        if not hasattr(genome, "map"):
-            raise TypeError("genome does not support mutation mapping (missing map method).")
-
+    def __call__(self, genome: Genome) -> Genome:
         import random
 
-        def mutate_element(item: T) -> T:
-            return self.mutation_fn(item) if random.random() < self.mutation_rate else item
+        mutated_items = []
+        for item in genome:
+            if isinstance(item, Genome):
+                # Recursively mutate nested sub-genomes/segments
+                mutated_item = self(item)
+            else:
+                mutated_item = self.mutation_fn(item) if random.random() < self.mutation_rate else item
+            mutated_items.append(mutated_item)
 
-        return genome.map(mutate_element)
+        if isinstance(genome, Segment):
+            return genome.__class__(genome.key, mutated_items)
+        return genome.__class__(mutated_items)
