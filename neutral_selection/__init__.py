@@ -11,7 +11,6 @@ from .variation.recombination import (
     RecombinationStrategy,
     ElementwiseCrossover,
     NPointCrossover,
-    SegmentSwapCrossover,
     RandomNPointCrossover,
 )
 from .variation.mutate import UniformMutation
@@ -27,7 +26,6 @@ __all__ = [
     "RecombinationStrategy",
     "ElementwiseCrossover",
     "NPointCrossover",
-    "SegmentSwapCrossover",
     "RandomNPointCrossover",
     "UniformMutation",
 ]
