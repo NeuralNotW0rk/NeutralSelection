@@ -17,8 +17,8 @@ def n_point_crossover(parent_a: Genome, parent_b: Genome, cut_points: list[int])
     Polymorphically slices and swaps parent genomes at the specified cut points.
     Acts as the atomic helper operation for structural sequence crossovers.
     """
-    if not hasattr(parent_a, "__getitem__") or not hasattr(parent_a, "__len__"):
-        raise TypeError("parent_a must support sequence indexing and len for N-point crossover.")
+    if not isinstance(parent_a, Genome) or not isinstance(parent_b, Genome):
+        raise TypeError("parent_a and parent_b must be Genome instances.")
     if len(parent_a) != len(parent_b):
         raise ValueError("Genomes must have the same length for crossover")
     if any(not isinstance(c, int) or c < 0 for c in cut_points):
@@ -59,6 +59,10 @@ class NPointCrossover(RecombinationStrategy):
     """A structural crossover strategy that applies N-point sequence crossover at deterministic cut points."""
 
     def __init__(self, cut_points: list[int]) -> None:
+        if not isinstance(cut_points, list):
+            raise TypeError("cut_points must be a list of integers")
+        if any(not isinstance(c, int) or c < 0 for c in cut_points):
+            raise ValueError("Cut points must be non-negative integers")
         self.cut_points = cut_points
 
     def __call__(self, parent_a: Genome, parent_b: Genome) -> tuple[Genome, Genome]:
@@ -74,8 +78,8 @@ class RandomNPointCrossover(RecombinationStrategy):
         self.num_cut_points = num_cut_points
 
     def __call__(self, parent_a: Genome, parent_b: Genome) -> tuple[Genome, Genome]:
-        if not hasattr(parent_a, "__getitem__") or not hasattr(parent_a, "__len__"):
-            raise TypeError("parent_a must support sequence indexing and len for Random N-point crossover.")
+        if not isinstance(parent_a, Genome) or not isinstance(parent_b, Genome):
+            raise TypeError("parent_a and parent_b must be Genome instances.")
         if len(parent_a) != len(parent_b):
             raise ValueError("Genomes must have the same length for crossover")
 

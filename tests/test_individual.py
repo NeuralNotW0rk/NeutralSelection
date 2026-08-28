@@ -1,6 +1,6 @@
 import unittest
 from typing import Any
-from neutral_selection.representation.genome import ContiguousArrayGenome
+from neutral_selection.representation.genome import Genome
 from neutral_selection.representation.individual import Individual
 
 
@@ -13,7 +13,7 @@ class MockPhenotype:
 class TestIndividual(unittest.TestCase):
 
     def test_initialization(self) -> None:
-        genotype = ContiguousArrayGenome([1.0, 2.0, 3.0])
+        genotype = Genome([1.0, 2.0, 3.0])
         ind = Individual(genotype)
 
         self.assertEqual(ind.genotype, genotype)
@@ -25,12 +25,12 @@ class TestIndividual(unittest.TestCase):
             _ = ind.phenotype
 
     def test_expression_and_caching(self) -> None:
-        genotype = ContiguousArrayGenome([1.0, 2.0, 3.0])
+        genotype = Genome([1.0, 2.0, 3.0])
         ind = Individual(genotype)
 
         call_count = 0
 
-        def mock_decoder(g: ContiguousArrayGenome[float]) -> MockPhenotype:
+        def mock_decoder(g: Genome) -> MockPhenotype:
             nonlocal call_count
             call_count += 1
             return MockPhenotype(sum(g), list(g))
@@ -51,10 +51,10 @@ class TestIndividual(unittest.TestCase):
         self.assertIs(pheno2, pheno1)
 
     def test_clear_expression(self) -> None:
-        genotype = ContiguousArrayGenome([1.0, 2.0, 3.0])
+        genotype = Genome([1.0, 2.0, 3.0])
         ind = Individual(genotype)
 
-        def mock_decoder(g: ContiguousArrayGenome[float]) -> MockPhenotype:
+        def mock_decoder(g: Genome) -> MockPhenotype:
             return MockPhenotype(sum(g), list(g))
 
         ind.express(mock_decoder)
@@ -68,7 +68,7 @@ class TestIndividual(unittest.TestCase):
             _ = ind.phenotype
 
     def test_fail_fast_validations(self) -> None:
-        genotype = ContiguousArrayGenome([1.0, 2.0, 3.0])
+        genotype = Genome([1.0, 2.0, 3.0])
         ind = Individual(genotype)
 
         # Missing decode_fn (None)

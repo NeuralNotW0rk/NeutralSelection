@@ -20,6 +20,8 @@ class ElementwiseCrossover(RecombinationStrategy):
         self.crossover_fn = crossover_fn
 
     def __call__(self, parent_a: Genome, parent_b: Genome) -> Genome:
+        if not isinstance(parent_a, Genome) or not isinstance(parent_b, Genome):
+            raise TypeError("parent_a and parent_b must be Genome instances.")
         if len(parent_a) != len(parent_b):
             raise ValueError("Genomes must have the same length for crossover.")
 

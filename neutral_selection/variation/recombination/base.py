@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union
 from neutral_selection.representation.genome import Genome
 from neutral_selection.representation.individual import Individual
 
@@ -6,7 +6,7 @@ from neutral_selection.representation.individual import Individual
 class RecombinationStrategy:
     """Base class for all recombination strategies in the library."""
 
-    def __call__(self, parent_a: Genome, parent_b: Genome) -> Genome | tuple[Genome, ...]:
+    def __call__(self, parent_a: Genome, parent_b: Genome) -> Union[Genome, tuple[Genome, ...]]:
         raise NotImplementedError("Subclasses must implement __call__")
 
 

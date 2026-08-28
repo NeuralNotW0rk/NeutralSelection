@@ -13,7 +13,17 @@ from .variation.recombination import (
     NPointCrossover,
     RandomNPointCrossover,
 )
-from .variation.mutate import UniformMutation
+from .variation.mutation import (
+    mutate,
+    MutationStrategy,
+    UniformMutation,
+    InversionMutation,
+    SwapMutation,
+    ScrambleMutation,
+    gaussian_noise_mutator,
+    bit_flip_mutator,
+    attribute_mutator,
+)
 
 __all__ = [
     "Genome",
@@ -27,5 +37,13 @@ __all__ = [
     "ElementwiseCrossover",
     "NPointCrossover",
     "RandomNPointCrossover",
+    "mutate",
+    "MutationStrategy",
     "UniformMutation",
+    "InversionMutation",
+    "SwapMutation",
+    "ScrambleMutation",
+    "gaussian_noise_mutator",
+    "bit_flip_mutator",
+    "attribute_mutator",
 ]

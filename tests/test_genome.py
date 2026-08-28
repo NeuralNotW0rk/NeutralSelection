@@ -1,9 +1,11 @@
 import unittest
+import random
 from dataclasses import dataclass
 from typing import Any
-from neutral_selection.representation.genome import ContiguousArrayGenome, SegmentedGenome
-from neutral_selection.variation.recombination import ElementwiseCrossover, NPointCrossover, SegmentSwapCrossover
-from neutral_selection.variation.mutate import UniformMutation
+
+from neutral_selection.representation.genome import Genome, Segment
+from neutral_selection.variation.recombination import ElementwiseCrossover, NPointCrossover, RandomNPointCrossover
+from neutral_selection.variation.mutation import mutate, UniformMutation, InversionMutation, SwapMutation, ScrambleMutation, gaussian_noise_mutator, bit_flip_mutator, attribute_mutator
 
 
 @dataclass
@@ -12,17 +14,17 @@ class CustomPayload:
     tag: str
 
 
-class TestContiguousArrayGenome(unittest.TestCase):
+class TestGenomeAndSegment(unittest.TestCase):
 
     def test_initialization(self) -> None:
-        g = ContiguousArrayGenome([1, 2, 3])
+        g = Genome([1, 2, 3])
         self.assertEqual(list(g), [1, 2, 3])
 
         with self.assertRaises(TypeError):
-            ContiguousArrayGenome((1, 2, 3))  # type: ignore
+            Genome((1, 2, 3))  # type: ignore
 
     def test_sequence_protocol(self) -> None:
-        g = ContiguousArrayGenome([10, 20, 30, 40])
+        g = Genome([10, 20, 30, 40])
         self.assertEqual(len(g), 4)
         self.assertEqual(g[0], 10)
         self.assertEqual(g[1:3], [20, 30])
@@ -31,58 +33,17 @@ class TestContiguousArrayGenome(unittest.TestCase):
         with self.assertRaises(TypeError):
             _ = g["invalid"]  # type: ignore
 
-    def test_map(self) -> None:
-        g = ContiguousArrayGenome([1, 2, 3])
-        mapped = g.map(lambda x: x * 10)
-        self.assertEqual(list(mapped), [10, 20, 30])
-
-        # Fail-Fast:
-        with self.assertRaises(ValueError):
-            g.map(None)  # type: ignore
-        with self.assertRaises(TypeError):
-            g.map("not-callable")  # type: ignore
-
-    def test_zip_map(self) -> None:
-        g1 = ContiguousArrayGenome([1, 2, 3])
-        g2 = ContiguousArrayGenome([10, 20, 30])
-        zipped = g1.zip_map(g2, lambda x, y, b: x * (1 - b) + y * b, 0.5)
-        self.assertEqual(list(zipped), [5.5, 11.0, 16.5])
-
-        # Fail-Fast:
-        with self.assertRaises(TypeError):
-            g1.zip_map("not-a-genome", lambda x, y, b: x, 0.5)  # type: ignore
-        with self.assertRaises(ValueError):
-            g1.zip_map(g2, None, 0.5)  # type: ignore
-        with self.assertRaises(TypeError):
-            g1.zip_map(g2, "not-callable", 0.5)  # type: ignore
-        with self.assertRaises(TypeError):
-            g1.zip_map(g2, lambda x, y, b: x, "invalid")  # type: ignore
-        with self.assertRaises(ValueError):
-            g1.zip_map(ContiguousArrayGenome([1]), lambda x, y, b: x, 0.5)
-
-    def test_crossover_structural(self) -> None:
-        g1 = ContiguousArrayGenome([1, 2, 3, 4, 5])
-        g2 = ContiguousArrayGenome([10, 20, 30, 40, 50])
-
-        # 1-point crossover at index 2
-        child_a, child_b = g1.crossover(g2, [2])
-        self.assertEqual(list(child_a), [1, 2, 30, 40, 50])
-        self.assertEqual(list(child_b), [10, 20, 3, 4, 5])
-
-        # Validation: other must be ContiguousArrayGenome
-        with self.assertRaises(TypeError):
-            g1.crossover([10, 20, 30, 40, 50], [2])  # type: ignore
-
-        # Validation: cut points must be non-negative
-        with self.assertRaises(ValueError):
-            g1.crossover(g2, [-1])
+    def test_segment_initialization(self) -> None:
+        s = Segment("block1", [1, 2])
+        self.assertEqual(s.key, "block1")
+        self.assertEqual(list(s), [1, 2])
 
 
 class TestVariationStrategies(unittest.TestCase):
 
     def test_n_point_crossover_strategy(self) -> None:
-        g1 = ContiguousArrayGenome([1, 2, 3, 4, 5])
-        g2 = ContiguousArrayGenome([10, 20, 30, 40, 50])
+        g1 = Genome([1, 2, 3, 4, 5])
+        g2 = Genome([10, 20, 30, 40, 50])
 
         strategy = NPointCrossover([2])
         child_a, child_b = strategy(g1, g2)
@@ -97,14 +58,26 @@ class TestVariationStrategies(unittest.TestCase):
 
         # Fail-Fast on call:
         with self.assertRaises(TypeError):
-            strategy("invalid-parent", g2)
+            strategy("invalid-parent", g2)  # type: ignore
+
+    def test_random_n_point_crossover_strategy(self) -> None:
+        g1 = Genome([1, 2, 3, 4, 5])
+        g2 = Genome([10, 20, 30, 40, 50])
+
+        strategy = RandomNPointCrossover(1)
+        # Mock random sample to return [2]
+        import unittest.mock as mock
+        with mock.patch("random.sample", return_value=[2]):
+            child_a, child_b = strategy(g1, g2)
+        self.assertEqual(list(child_a), [1, 2, 30, 40, 50])
+        self.assertEqual(list(child_b), [10, 20, 3, 4, 5])
 
     def test_elementwise_crossover_strategy(self) -> None:
-        g1 = ContiguousArrayGenome([
+        g1 = Genome([
             CustomPayload(1.0, "A"),
             CustomPayload(2.0, "B")
         ])
-        g2 = ContiguousArrayGenome([
+        g2 = Genome([
             CustomPayload(3.0, "X"),
             CustomPayload(7.0, "Y")
         ])
@@ -127,10 +100,10 @@ class TestVariationStrategies(unittest.TestCase):
 
         # Fail-Fast on call:
         with self.assertRaises(TypeError):
-            strategy("invalid-parent", g2)
+            strategy("invalid-parent", g2)  # type: ignore
 
     def test_uniform_mutation_strategy(self) -> None:
-        g = ContiguousArrayGenome([
+        g = Genome([
             CustomPayload(10.0, "first"),
             CustomPayload(20.0, "second")
         ])
@@ -139,12 +112,12 @@ class TestVariationStrategies(unittest.TestCase):
             return CustomPayload(p.value + 5.0, p.tag.upper())
 
         strategy_all = UniformMutation(1.0, mutate_fn)
-        mutated_all = strategy_all(g)
+        mutated_all = mutate(g, strategy_all)
         self.assertEqual(mutated_all[0].value, 15.0)
         self.assertEqual(mutated_all[0].tag, "FIRST")
 
         strategy_none = UniformMutation(0.0, mutate_fn)
-        mutated_none = strategy_none(g)
+        mutated_none = mutate(g, strategy_none)
         self.assertEqual(mutated_none[0].value, 10.0)
 
         # Fail-Fast on initialization
@@ -155,86 +128,103 @@ class TestVariationStrategies(unittest.TestCase):
 
         # Fail-Fast on call:
         with self.assertRaises(TypeError):
-            strategy_all("invalid-genome")
+            mutate("invalid-genome", strategy_all)
 
-    def test_segment_swap_crossover_strategy(self) -> None:
-        seg1_a = ContiguousArrayGenome([1, 2])
-        seg2_a = ContiguousArrayGenome([3, 4])
-        genome_a = SegmentedGenome({"block1": seg1_a, "block2": seg2_a})
+    def test_inversion_mutation_strategy(self) -> None:
+        g = Genome([1, 2, 3, 4, 5])
+        strategy = InversionMutation()
 
-        seg1_b = ContiguousArrayGenome([10, 20])
-        seg2_b = ContiguousArrayGenome([30, 40])
-        genome_b = SegmentedGenome({"block1": seg1_b, "block2": seg2_b})
+        # Mock random sample to reverse items between index 1 and 4 -> elements [2, 3, 4] -> reversed [4, 3, 2]
+        import unittest.mock as mock
+        with mock.patch("random.sample", return_value=[1, 4]):
+            mutated = mutate(g, strategy)
 
-        strategy = SegmentSwapCrossover({"block1"})
-        child = strategy(genome_a, genome_b)
-        self.assertEqual(list(child["block1"]), [10, 20])
-        self.assertEqual(list(child["block2"]), [3, 4])
+        self.assertEqual(list(mutated), [1, 4, 3, 2, 5])
+        self.assertNotIsInstance(mutated, list)
+        self.assertIsInstance(mutated, Genome)
 
-        # Fail-Fast on initialization
-        with self.assertRaises(TypeError):
-            SegmentSwapCrossover(["block1"])  # type: ignore
+        # Boundary condition: length 1 genome should remain unchanged
+        g_short = Genome([42])
+        self.assertEqual(list(mutate(g_short, strategy)), [42])
 
-        # Fail-Fast on call
-        with self.assertRaises(TypeError):
-            strategy("invalid-genome", genome_b)
+    def test_swap_mutation_strategy(self) -> None:
+        g = Genome([1, 2, 3, 4, 5])
+        strategy = SwapMutation()
 
+        # Mock random sample to swap index 1 and 3 (values 2 and 4)
+        import unittest.mock as mock
+        with mock.patch("random.sample", return_value=[1, 3]):
+            mutated = mutate(g, strategy)
 
-class TestSegmentedGenome(unittest.TestCase):
+        self.assertEqual(list(mutated), [1, 4, 3, 2, 5])
 
-    def setUp(self) -> None:
-        self.seg1_a = ContiguousArrayGenome([1, 2])
-        self.seg2_a = ContiguousArrayGenome([3, 4])
-        self.genome_a = SegmentedGenome({"block1": self.seg1_a, "block2": self.seg2_a})
+        # Boundary condition: length 1 genome should remain unchanged
+        g_short = Genome([42])
+        self.assertEqual(list(mutate(g_short, strategy)), [42])
 
-        self.seg1_b = ContiguousArrayGenome([10, 20])
-        self.seg2_b = ContiguousArrayGenome([30, 40])
-        self.genome_b = SegmentedGenome({"block1": self.seg1_b, "block2": self.seg2_b})
+    def test_scramble_mutation_strategy(self) -> None:
+        g = Genome([1, 2, 3, 4, 5])
+        strategy = ScrambleMutation()
 
-    def test_initialization(self) -> None:
-        with self.assertRaises(TypeError):
-            SegmentedGenome([self.seg1_a, self.seg2_a])  # type: ignore
-        with self.assertRaises(TypeError):
-            SegmentedGenome({"block1": [1, 2]})  # type: ignore
+        # Mock random shuffle to reverse the scramble slice (index 1 to 4 -> [2, 3, 4])
+        # random.shuffle works in-place; we mock it to reverse the input list
+        def mock_shuffle(x: list) -> None:
+            x.reverse()
 
-    def test_dict_like_navigation(self) -> None:
-        self.assertEqual(self.genome_a["block1"], self.seg1_a)
-        with self.assertRaises(KeyError):
-            _ = self.genome_a["nonexistent"]
-        self.assertEqual(set(self.genome_a.keys()), {"block1", "block2"})
-        items = dict(self.genome_a.items())
-        self.assertEqual(items["block1"], self.seg1_a)
+        import unittest.mock as mock
+        with mock.patch("random.sample", return_value=[1, 4]), mock.patch("random.shuffle", side_effect=mock_shuffle):
+            mutated = mutate(g, strategy)
 
-    def test_map(self) -> None:
-        mapped = self.genome_a.map(lambda x: x + 100)
-        self.assertEqual(list(mapped["block1"]), [101, 102])
-        self.assertEqual(list(mapped["block2"]), [103, 104])
+        self.assertEqual(list(mutated), [1, 4, 3, 2, 5])
 
-        # Verify fail-fast
-        with self.assertRaises(ValueError):
-            self.genome_a.map(None)  # type: ignore
+        # Boundary condition: length 1 genome should remain unchanged
+        g_short = Genome([42])
+        self.assertEqual(list(mutate(g_short, strategy)), [42])
 
-    def test_zip_map(self) -> None:
-        def blend_fn(x: int, y: int, b: float) -> int:
-            return int(x * (1 - b) + y * b)
+    def test_generic_mutators(self) -> None:
+        # Test gaussian_noise_mutator (float)
+        float_mut = gaussian_noise_mutator(1.5)
+        # Mock random.gauss to return 1.5
+        import unittest.mock as mock
+        with mock.patch("random.gauss", return_value=1.5) as mock_gauss:
+            self.assertEqual(float_mut(10.0), 11.5)
+            mock_gauss.assert_called_once_with(0.0, 1.5)
 
-        zipped = self.genome_a.zip_map(self.genome_b, blend_fn, 0.5)
-        self.assertEqual(list(zipped["block1"]), [5, 11])
-        self.assertEqual(list(zipped["block2"]), [16, 22])
+        # Test gaussian_noise_mutator with custom mean
+        float_mut_mean = gaussian_noise_mutator(1.5, mean=5.0)
+        with mock.patch("random.gauss", return_value=6.5) as mock_gauss_mean:
+            self.assertEqual(float_mut_mean(10.0), 16.5)
+            mock_gauss_mean.assert_called_once_with(5.0, 1.5)
 
-        # Fail-Fast
-        with self.assertRaises(TypeError):
-            self.genome_a.zip_map("invalid", blend_fn, 0.5)  # type: ignore
-        with self.assertRaises(ValueError):
-            self.genome_a.zip_map(self.genome_b, None, 0.5)  # type: ignore
+        # Test bit_flip_mutator
+        bool_mut_always = bit_flip_mutator(1.0)
+        self.assertFalse(bool_mut_always(True))
+        bool_mut_never = bit_flip_mutator(0.0)
+        self.assertTrue(bool_mut_never(True))
 
-    def test_crossover_segments(self) -> None:
-        child = self.genome_a.crossover_segments(self.genome_b, {"block1"})
-        self.assertEqual(list(child["block1"]), [10, 20])
-        self.assertEqual(list(child["block2"]), [3, 4])
+        # Test attribute_mutator
+        @dataclass
+        class SimpleGene:
+            val: float
+            active: bool
 
-        with self.assertRaises(KeyError):
-            self.genome_a.crossover_segments(self.genome_b, {"nonexistent"})
+            def __post_init__(self) -> None:
+                pass
+
+        gene = SimpleGene(10.0, True)
+        gene_mutator = attribute_mutator({
+            "val": gaussian_noise_mutator(1.0),
+            "active": bit_flip_mutator(1.0)
+        })
+
+        with mock.patch("random.gauss", return_value=2.0):
+            mutated_gene = gene_mutator(gene)
+
+        self.assertEqual(mutated_gene.val, 12.0)
+        self.assertFalse(mutated_gene.active)
+        # Verify original was not mutated in-place
+        self.assertEqual(gene.val, 10.0)
+        self.assertTrue(gene.active)
 
 
 if __name__ == "__main__":

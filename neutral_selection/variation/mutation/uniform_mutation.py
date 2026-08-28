@@ -1,10 +1,13 @@
+import random
 from typing import Callable, Any
 from neutral_selection.representation.genome import Genome, Segment
+from neutral_selection.variation.mutation.base import MutationStrategy
 
 
-class UniformMutation:
+class UniformMutation(MutationStrategy):
     """
     A structure-agnostic mutation strategy that maps a mutation function across elements recursively.
+    Supports flat genomes, nested genomes, and segment hierarchies.
     """
 
     def __init__(self, mutation_rate: float, mutation_fn: Callable[[Any], Any]) -> None:
@@ -20,7 +23,8 @@ class UniformMutation:
         self.mutation_fn = mutation_fn
 
     def __call__(self, genome: Genome) -> Genome:
-        import random
+        if not isinstance(genome, Genome):
+            raise TypeError("genome must be an instance of Genome.")
 
         mutated_items = []
         for item in genome:
