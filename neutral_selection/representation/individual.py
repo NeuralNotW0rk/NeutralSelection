@@ -1,4 +1,5 @@
-from typing import Callable, Any
+from __future__ import annotations
+from typing import Callable, Any, Optional
 from neutral_selection.representation.genome import Genome
 
 

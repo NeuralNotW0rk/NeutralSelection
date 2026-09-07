@@ -1,4 +1,5 @@
-from typing import Iterable, Any
+from __future__ import annotations
+from typing import Iterable, Any, Optional
 from neutral_selection.representation.individual import Individual
 
 

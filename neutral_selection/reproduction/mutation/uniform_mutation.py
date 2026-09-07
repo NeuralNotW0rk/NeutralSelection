@@ -1,7 +1,7 @@
 import random
 from typing import Callable, Any
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.variation.mutation.base import MutationStrategy
+from neutral_selection.reproduction.mutation.base import MutationStrategy
 
 
 class UniformMutation(MutationStrategy):
