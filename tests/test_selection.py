@@ -1,14 +1,13 @@
 from __future__ import annotations
+
 import unittest
 import unittest.mock as mock
 from neutral_selection.representation.genome import Genome
 from neutral_selection.representation.individual import Individual
 from neutral_selection.representation.population import Population
-from neutral_selection.reproduction.selection import (
+from neutral_selection.variation.selection import (
     SelectionStrategy,
-    SurvivorStrategy,
     select,
-    select_survivors,
     TournamentSelection,
     RouletteWheelSelection,
     StochasticUniversalSamplingSelection,
@@ -18,10 +17,6 @@ from neutral_selection.reproduction.selection import (
     ElitistSelection,
     RandomSelection,
     BoltzmannSelection,
-    GenerationalReplacement,
-    PlusReplacement,
-    CommaReplacement,
-    SteadyStateReplacement,
 )
 
 
@@ -163,12 +158,12 @@ class TestProportionateSelection(unittest.TestCase):
         ]
         strat = RouletteWheelSelection()
 
-        # Cumulative weights: [10, 30, 100]
-        with mock.patch("random.uniform", return_value=5.0):
+        # Cumulative normalized weights: [0.10, 0.30, 1.00]
+        with mock.patch("random.random", return_value=0.05):
             self.assertEqual(strat.select_one(inds).fitness, 10.0)
-        with mock.patch("random.uniform", return_value=25.0):
+        with mock.patch("random.random", return_value=0.25):
             self.assertEqual(strat.select_one(inds).fitness, 20.0)
-        with mock.patch("random.uniform", return_value=85.0):
+        with mock.patch("random.random", return_value=0.85):
             self.assertEqual(strat.select_one(inds).fitness, 70.0)
 
     def test_roulette_wheel_minimization(self) -> None:
@@ -200,9 +195,13 @@ class TestProportionateSelection(unittest.TestCase):
             _make_individual(3, 70.0),  # 70%
         ]
         strat = StochasticUniversalSamplingSelection()
-        # When selecting k=10, Baker's SUS guarantees exactly:
-        # ind 1 gets 1, ind 2 gets 2, ind 3 gets 7
-        with mock.patch("random.uniform", return_value=0.0):
+        # When selecting k=10, step_size = 100/10 = 10.0
+        # Placing start_point at 5.0 (midpoint of first interval [0, 10]):
+        # pointers: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95]
+        # ind1 (10): 1 pointer (5)
+        # ind2 (20): 2 pointers (15, 25)
+        # ind3 (70): 7 pointers (35, 45, 55, 65, 75, 85, 95)
+        with mock.patch("random.uniform", return_value=5.0):
             selected = strat.select(inds, k=10)
 
         counts = {ind.fitness: selected.count(ind) for ind in inds}
@@ -223,7 +222,6 @@ class TestRankSelection(unittest.TestCase):
         selected = strat.select(inds, k=5)
         self.assertEqual(len(selected), 5)
 
-        # Pressure boundary validation
         with self.assertRaises(ValueError):
             LinearRankSelection(selection_pressure=0.9)
         with self.assertRaises(ValueError):
@@ -248,14 +246,13 @@ class TestRankSelection(unittest.TestCase):
 class TestTruncationAndElitistSelection(unittest.TestCase):
 
     def test_truncation_with_top_k(self) -> None:
-        inds = [_make_individual(i, float(i * 10)) for i in range(5)]  # [0, 10, 20, 30, 40]
+        inds = [_make_individual(i, float(i * 10)) for i in range(5)]
         strat = TruncationSelection(top_k=2, with_replacement=False)
         selected = strat.select(inds, k=2)
         self.assertEqual(len(selected), 2)
         for s in selected:
             self.assertIn(s.fitness, [30.0, 40.0])
 
-        # Without replacement requesting more than pool size
         with self.assertRaises(ValueError):
             strat.select(inds, k=3)
 
@@ -281,13 +278,12 @@ class TestTruncationAndElitistSelection(unittest.TestCase):
 class TestRandomAndBoltzmannSelection(unittest.TestCase):
 
     def test_random_selection(self) -> None:
-        inds = [_make_individual(i) for i in range(4)]  # Fitness is None
+        inds = [_make_individual(i) for i in range(4)]
         strat = RandomSelection(with_replacement=False)
         selected = strat.select(inds, k=3)
         self.assertEqual(len(selected), 3)
         self.assertEqual(len(set(selected)), 3)
 
-        # Without replacement requesting > pop size
         with self.assertRaises(ValueError):
             strat.select(inds, k=5)
 
@@ -296,77 +292,12 @@ class TestRandomAndBoltzmannSelection(unittest.TestCase):
             _make_individual(1, 10.0),
             _make_individual(2, 50.0),
         ]
-        # Very low temperature -> greedy behavior
         strat = BoltzmannSelection(temperature=0.001)
         selected = strat.select(inds, k=10)
         self.assertTrue(all(s.fitness == 50.0 for s in selected))
 
         with self.assertRaises(ValueError):
             BoltzmannSelection(temperature=-1.0)
-
-
-class TestSurvivorReplacementStrategies(unittest.TestCase):
-
-    def test_generational_replacement_with_elitism(self) -> None:
-        parents = [_make_individual(i, float(i * 10)) for i in range(4)]      # [0, 10, 20, 30]
-        offspring = [_make_individual(10 + i, float(100 + i)) for i in range(4)] # [100, 101, 102, 103]
-
-        strat = GenerationalReplacement(num_elites=1)
-        survivors = select_survivors(parents, offspring, strat, target_size=4)
-
-        self.assertEqual(len(survivors), 4)
-        # 1 elite parent (fitness 30.0) + 3 top offspring (103, 102, 101)
-        self.assertEqual(survivors[0].fitness, 30.0)
-        self.assertEqual(survivors[1].fitness, 103.0)
-        self.assertEqual(survivors[2].fitness, 102.0)
-        self.assertEqual(survivors[3].fitness, 101.0)
-
-    def test_plus_replacement(self) -> None:
-        # (mu + lambda)
-        parents = [_make_individual(1, 10.0), _make_individual(2, 80.0)]
-        offspring = [_make_individual(3, 50.0), _make_individual(4, 90.0)]
-
-        strat = PlusReplacement()
-        survivors = strat.select_survivors(parents, offspring, target_size=2)
-
-        self.assertEqual(len(survivors), 2)
-        self.assertEqual(survivors[0].fitness, 90.0)
-        self.assertEqual(survivors[1].fitness, 80.0)
-
-    def test_comma_replacement(self) -> None:
-        # (mu, lambda)
-        parents = [_make_individual(1, 100.0), _make_individual(2, 100.0)]
-        offspring = [_make_individual(3, 30.0), _make_individual(4, 50.0), _make_individual(5, 40.0)]
-
-        strat = CommaReplacement()
-        survivors = strat.select_survivors(parents, offspring, target_size=2)
-
-        self.assertEqual(len(survivors), 2)
-        self.assertEqual(survivors[0].fitness, 50.0)
-        self.assertEqual(survivors[1].fitness, 40.0)
-
-        # Error if offspring < target_size
-        with self.assertRaises(ValueError):
-            strat.select_survivors(parents, offspring, target_size=5)
-
-    def test_steady_state_replacement(self) -> None:
-        parents = [
-            _make_individual(1, 10.0),
-            _make_individual(2, 40.0),
-            _make_individual(3, 30.0),
-            _make_individual(4, 20.0),
-        ]
-        offspring = [_make_individual(5, 50.0), _make_individual(6, 60.0)]
-
-        strat = SteadyStateReplacement()
-        survivors = strat.select_survivors(parents, offspring, target_size=4)
-
-        self.assertEqual(len(survivors), 4)
-        # Best 2 parents (40.0, 30.0) + 2 offspring (50.0, 60.0)
-        self.assertEqual(survivors[0].fitness, 40.0)
-        self.assertEqual(survivors[1].fitness, 30.0)
-        self.assertEqual(survivors[2].fitness, 50.0)
-        self.assertEqual(survivors[3].fitness, 60.0)
 
 
 if __name__ == "__main__":

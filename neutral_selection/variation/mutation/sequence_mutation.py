@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Optional
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.reproduction.mutation.base import MutationStrategy
+from .base import MutationStrategy
 
 
 def _clone_genome_structure(original: Genome, new_items: list) -> Genome:

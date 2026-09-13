@@ -16,10 +16,6 @@ class BoltzmannSelection(SelectionStrategy):
     Assigns selection probabilities via a Boltzmann/Gibbs distribution:
         p(i) = exp(s_i / T) / sum(exp(s_j / T))
     where s_i is fitness (or -fitness for minimization) and T > 0 is the temperature parameter.
-
-    Allows simulating annealing in genetic algorithms:
-    - High temperature (T >> 1): nearly uniform selection, encouraging wide exploration.
-    - Low temperature (T -> 0): greedy selection, strongly favoring the highest-fitness individuals.
     """
 
     def __init__(

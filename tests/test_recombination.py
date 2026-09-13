@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 import unittest.mock as mock
 from neutral_selection.representation.genome import Genome
-from neutral_selection.reproduction.recombination import (
+from neutral_selection.variation.recombination import (
     recombine,
     OnePointCrossover,
     TwoPointCrossover,

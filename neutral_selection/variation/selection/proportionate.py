@@ -38,8 +38,7 @@ def _prepare_proportionate_weights(
     total = sum(weights)
     if total <= 0:
         raise ValueError(
-            "Total population fitness/weight is 0 (or non-positive). "
-            "Cannot perform proportionate selection with zero total weight."
+            f"Total fitness sum ({total}) must be strictly positive for proportionate selection."
         )
 
     return weights
@@ -47,11 +46,13 @@ def _prepare_proportionate_weights(
 
 class RouletteWheelSelection(SelectionStrategy):
     """
-    Fitness Proportionate Selection (Roulette Wheel Selection).
+    Fitness-Proportionate / Roulette Wheel Selection strategy.
 
-    The probability of selecting an individual is directly proportional to its fitness.
-    For minimization problems, fitnesses are inverted relative to the maximum population fitness.
-    An optional `fitness_offset` can be specified to shift values to ensure strictly positive weights.
+    Selects individuals with probability strictly proportional to their evaluated fitness:
+        p(i) = f(i) / sum(f(j))
+
+    Requires non-negative fitness values. An optional `fitness_offset` can be supplied to shift
+    values if negative fitnesses are present.
     """
 
     def __init__(
@@ -68,6 +69,7 @@ class RouletteWheelSelection(SelectionStrategy):
 
         if not isinstance(minimize, bool):
             raise TypeError(f"minimize must be a boolean, got {type(minimize).__name__}.")
+
         self.minimize = minimize
 
     def select(
@@ -79,18 +81,22 @@ class RouletteWheelSelection(SelectionStrategy):
         raw_fitnesses = _validate_fitnesses(inds)
         _validate_k(k)
 
-        weights = _prepare_proportionate_weights(raw_fitnesses, self.fitness_offset, self.minimize)
-        total = sum(weights)
+        weights = _prepare_proportionate_weights(
+            raw_fitnesses=raw_fitnesses,
+            fitness_offset=self.fitness_offset,
+            minimize=self.minimize,
+        )
 
+        total_w = sum(weights)
         cum_weights: list[float] = []
         acc = 0.0
         for w in weights:
-            acc += w
+            acc += w / total_w
             cum_weights.append(acc)
 
         selected: list[Individual] = []
         for _ in range(k):
-            r = random.uniform(0.0, total)
+            r = random.random()
             idx = bisect.bisect_right(cum_weights, r)
             idx = min(idx, len(inds) - 1)
             selected.append(inds[idx])
@@ -100,11 +106,14 @@ class RouletteWheelSelection(SelectionStrategy):
 
 class StochasticUniversalSamplingSelection(SelectionStrategy):
     """
-    Stochastic Universal Sampling (SUS) selection strategy (Baker, 1987).
+    Stochastic Universal Sampling (SUS) Selection strategy (Baker, 1987).
 
-    SUS operates like a single-spin roulette wheel with `k` equally-spaced pointers.
-    This guarantees zero sampling bias and minimal spread, ensuring that individuals
-    with expected selection count E are selected either floor(E) or ceil(E) times.
+    An optimal variant of roulette wheel selection that places `k` equally-spaced pointers
+    along a 1D selection line (distance 1/k apart). A single random spin in [0, 1/k) determines
+    all selected individuals simultaneously.
+
+    SUS exhibits zero bias and minimal spread, preventing premature convergence caused by
+    statistical noise in standard roulette wheel selection.
     """
 
     def __init__(
@@ -121,6 +130,7 @@ class StochasticUniversalSamplingSelection(SelectionStrategy):
 
         if not isinstance(minimize, bool):
             raise TypeError(f"minimize must be a boolean, got {type(minimize).__name__}.")
+
         self.minimize = minimize
 
     def select(
@@ -132,21 +142,27 @@ class StochasticUniversalSamplingSelection(SelectionStrategy):
         raw_fitnesses = _validate_fitnesses(inds)
         _validate_k(k)
 
-        weights = _prepare_proportionate_weights(raw_fitnesses, self.fitness_offset, self.minimize)
-        total = sum(weights)
+        weights = _prepare_proportionate_weights(
+            raw_fitnesses=raw_fitnesses,
+            fitness_offset=self.fitness_offset,
+            minimize=self.minimize,
+        )
 
-        step = total / k
-        start = random.uniform(0.0, step)
-        pointers = [start + i * step for i in range(k)]
+        total_w = sum(weights)
+        step_size = total_w / k
+        start_point = random.uniform(0.0, step_size)
+
+        pointers = [start_point + i * step_size for i in range(k)]
 
         selected: list[Individual] = []
-        current_idx = 0
-        cum_weight = weights[0]
+        cur_sum = weights[0]
+        ind_idx = 0
+        n = len(inds)
 
-        for pointer in pointers:
-            while pointer >= cum_weight and current_idx < len(inds) - 1:
-                current_idx += 1
-                cum_weight += weights[current_idx]
-            selected.append(inds[current_idx])
+        for p in pointers:
+            while p > cur_sum and ind_idx < n - 1:
+                ind_idx += 1
+                cur_sum += weights[ind_idx]
+            selected.append(inds[ind_idx])
 
         return selected

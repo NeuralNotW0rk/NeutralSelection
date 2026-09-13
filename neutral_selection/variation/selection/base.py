@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Sequence, Union, Tuple, List, Optional
+from typing import Any, Sequence, Union, Optional
 from neutral_selection.representation.individual import Individual
 from neutral_selection.representation.population import Population
 
 
-def _extract_individuals(population: Any) -> list[Individual]:
+def _extract_individuals(population: Any, allow_empty: bool = False) -> list[Individual]:
     """
     Extracts and validates a list of Individuals from a Population or sequence.
-    Raises descriptive errors if invalid or empty.
+    Raises descriptive errors if invalid or empty (unless allow_empty=True).
     """
     if population is None:
         raise ValueError("population must be provided and cannot be None.")
@@ -22,7 +22,7 @@ def _extract_individuals(population: Any) -> list[Individual]:
             f"population must be an instance of Population or Sequence of Individuals, got {type(population).__name__}."
         )
 
-    if not inds:
+    if not inds and not allow_empty:
         raise ValueError("Population is empty. Cannot perform selection on an empty population.")
 
     for i, ind in enumerate(inds):
@@ -67,7 +67,7 @@ def _validate_k(k: Any, max_k: Optional[int] = None, allow_zero: bool = False) -
 
 
 class SelectionStrategy:
-    """Base class for all parent/mating selection strategies in the library."""
+    """Base class for all parent selection strategies in the library."""
 
     def select(
         self,
@@ -119,38 +119,13 @@ class SelectionStrategy:
         return [(selected[i], selected[i + 1]) for i in range(0, num_pairs * 2, 2)]
 
 
-class SurvivorStrategy:
-    """Base class for survivor selection / replacement strategies in the library."""
-
-    def select_survivors(
-        self,
-        parents: Union[Population, Sequence[Individual]],
-        offspring: Union[Population, Sequence[Individual]],
-        target_size: Optional[int] = None,
-    ) -> list[Individual]:
-        """
-        Selects target_size survivors from parents and offspring to form the next generation.
-        Must be implemented by subclasses.
-        """
-        raise NotImplementedError("Subclasses must implement select_survivors()")
-
-    def __call__(
-        self,
-        parents: Union[Population, Sequence[Individual]],
-        offspring: Union[Population, Sequence[Individual]],
-        target_size: Optional[int] = None,
-    ) -> list[Individual]:
-        """Convenience callable alias for select_survivors()."""
-        return self.select_survivors(parents, offspring, target_size=target_size)
-
-
 def select(
     population: Union[Population, Sequence[Individual]],
     strategy: SelectionStrategy,
     k: int = 1,
 ) -> list[Individual]:
     """
-    Applies a selection strategy to a population or sequence of individuals.
+    Applies a parent selection strategy to a population or sequence of individuals.
     Returns a list of selected Individuals.
     """
     if strategy is None:
@@ -159,21 +134,3 @@ def select(
         raise TypeError(f"strategy must be an instance of SelectionStrategy, got {type(strategy).__name__}.")
 
     return strategy.select(population, k=k)
-
-
-def select_survivors(
-    parents: Union[Population, Sequence[Individual]],
-    offspring: Union[Population, Sequence[Individual]],
-    strategy: SurvivorStrategy,
-    target_size: Optional[int] = None,
-) -> list[Individual]:
-    """
-    Applies a survivor replacement strategy to parents and offspring.
-    Returns a list of surviving Individuals for the next generation.
-    """
-    if strategy is None:
-        raise ValueError("strategy must be provided and cannot be None.")
-    if not isinstance(strategy, SurvivorStrategy):
-        raise TypeError(f"strategy must be an instance of SurvivorStrategy, got {type(strategy).__name__}.")
-
-    return strategy.select_survivors(parents, offspring, target_size=target_size)

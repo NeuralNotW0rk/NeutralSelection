@@ -1,6 +1,6 @@
 from typing import Callable, Any
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.reproduction.recombination.base import RecombinationStrategy
+from .base import RecombinationStrategy
 
 
 class ElementwiseCrossover(RecombinationStrategy):

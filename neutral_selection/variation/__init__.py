@@ -1,13 +1,4 @@
-from .representation.genome import (
-    Genome,
-    Segment,
-    CrossoverFn,
-    MutationFn,
-)
-from .representation.lineage import Lineage
-from .representation.individual import Individual
-from .representation.population import Population
-from .variation.selection import (
+from .selection import (
     SelectionStrategy,
     select,
     TournamentSelection,
@@ -20,11 +11,10 @@ from .variation.selection import (
     RandomSelection,
     BoltzmannSelection,
 )
-from .variation.recombination import (
+from .recombination import (
     RecombinationStrategy,
     recombine,
     n_point_crossover,
-    ElementwiseCrossover,
     OnePointCrossover,
     TwoPointCrossover,
     NPointCrossover,
@@ -37,11 +27,17 @@ from .variation.recombination import (
     ArithmeticCrossover,
     BlendCrossover,
     SimulatedBinaryCrossover,
+    ElementwiseCrossover,
 )
-from .variation.mutation import (
+from .mutation import (
     MutationStrategy,
     mutate,
-    UniformMutation,
+    GaussianMutation,
+    UniformRealMutation,
+    PolynomialMutation,
+    CauchyMutation,
+    BitFlipMutation,
+    BoundaryMutation,
     InversionMutation,
     SwapMutation,
     ScrambleMutation,
@@ -49,46 +45,14 @@ from .variation.mutation import (
     TranspositionMutation,
     DuplicationMutation,
     DeletionMutation,
-    GaussianMutation,
-    UniformRealMutation,
-    PolynomialMutation,
-    CauchyMutation,
-    BitFlipMutation,
-    BoundaryMutation,
+    UniformMutation,
     gaussian_noise_mutator,
     bit_flip_mutator,
     attribute_mutator,
 )
-from .replacement import (
-    ReplacementStrategy,
-    replace,
-    GenerationalReplacement,
-    PlusReplacement,
-    CommaReplacement,
-    SteadyStateReplacement,
-)
-from .pipeline import (
-    GenerationPipeline,
-    step,
-)
-from .builders import (
-    build_selection_strategy,
-    build_crossover_strategy,
-    build_mutation_strategy,
-    build_replacement_strategy,
-    build_pipeline,
-)
 
 __all__ = [
-    # Representation
-    "Genome",
-    "Segment",
-    "CrossoverFn",
-    "MutationFn",
-    "Lineage",
-    "Individual",
-    "Population",
-    # Variation - Parent Selection
+    # Selection
     "SelectionStrategy",
     "select",
     "TournamentSelection",
@@ -100,11 +64,10 @@ __all__ = [
     "ElitistSelection",
     "RandomSelection",
     "BoltzmannSelection",
-    # Variation - Recombination
+    # Recombination
     "RecombinationStrategy",
     "recombine",
     "n_point_crossover",
-    "ElementwiseCrossover",
     "OnePointCrossover",
     "TwoPointCrossover",
     "NPointCrossover",
@@ -117,10 +80,16 @@ __all__ = [
     "ArithmeticCrossover",
     "BlendCrossover",
     "SimulatedBinaryCrossover",
-    # Variation - Mutation
+    "ElementwiseCrossover",
+    # Mutation
     "MutationStrategy",
     "mutate",
-    "UniformMutation",
+    "GaussianMutation",
+    "UniformRealMutation",
+    "PolynomialMutation",
+    "CauchyMutation",
+    "BitFlipMutation",
+    "BoundaryMutation",
     "InversionMutation",
     "SwapMutation",
     "ScrambleMutation",
@@ -128,29 +97,8 @@ __all__ = [
     "TranspositionMutation",
     "DuplicationMutation",
     "DeletionMutation",
-    "GaussianMutation",
-    "UniformRealMutation",
-    "PolynomialMutation",
-    "CauchyMutation",
-    "BitFlipMutation",
-    "BoundaryMutation",
+    "UniformMutation",
     "gaussian_noise_mutator",
     "bit_flip_mutator",
     "attribute_mutator",
-    # Replacement (Survivor Selection)
-    "ReplacementStrategy",
-    "replace",
-    "GenerationalReplacement",
-    "PlusReplacement",
-    "CommaReplacement",
-    "SteadyStateReplacement",
-    # Pipeline
-    "GenerationPipeline",
-    "step",
-    # Declarative Builders
-    "build_selection_strategy",
-    "build_crossover_strategy",
-    "build_mutation_strategy",
-    "build_replacement_strategy",
-    "build_pipeline",
 ]

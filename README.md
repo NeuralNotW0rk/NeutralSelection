@@ -19,36 +19,41 @@ Existing Python evolutionary libraries often fall into two extremes:
 
 ## Core Value Proposition
 
-* 🧩 **Composable Functional Primitives:** Every operator is a standalone callable (`strategy(parent_a, parent_b)`) and functional helper (`recombine`, `mutate`, `select`). Drop operators directly into any loop, game engine, or neural training pipeline without instantiating a monolithic framework.
+* 🧩 **Composable Functional Primitives:** Every operator is a standalone callable (`strategy(parent_a, parent_b)`) and functional helper (`recombine`, `mutate`, `select`, `replace`, `step`). Drop operators directly into any custom loop, interactive tool, or neural pipeline.
 * 🌳 **Heterogeneous & Segmented Genomes:** First-class support for multi-part chromosomes via `Segment` and `ElementwiseCrossover`. Different sections of a genome can have distinct representations, bounds, mutation rates, and crossover rules.
-* ⚡ **PyTorch & Generative AI Friendly:** Native helpers for mutating and blending PyTorch tensors, NumPy arrays, latent vectors, and named model attributes.
+* ⚡ **PyTorch & Generative AI Friendly:** Native ergonomics for mutating and blending PyTorch tensors, NumPy arrays, latent vectors, and named model attributes.
 * 🛡️ **Modern Python & Strict Type Safety:** Built from the ground up for Python 3.10+ with comprehensive type annotations, dataclasses, explicit error boundaries, and zero metaprogramming magic.
 
 ---
 
 ## Implemented Strategies
 
-### 1. Recombination (`neutral_selection.reproduction.recombination`)
+### 1. Variation — Parent Selection (`neutral_selection.variation.selection`)
+* `TournamentSelection`, `RouletteWheelSelection`, `StochasticUniversalSamplingSelection` (SUS), `LinearRankSelection`, `ExponentialRankSelection`, `TruncationSelection`, `ElitistSelection`, `RandomSelection`, `BoltzmannSelection`
+* Functional helper: `select(population, strategy, k)`
+
+### 2. Variation — Recombination (`neutral_selection.variation.recombination`)
 * **Positional & Structural:** `OnePointCrossover`, `TwoPointCrossover`, `NPointCrossover`, `RandomNPointCrossover`, `UniformCrossover`, `ShuffleCrossover`
 * **Permutation & Order-Preserving:** `OrderCrossover` (OX1), `PartiallyMatchedCrossover` (PMX), `CycleCrossover` (CX)
 * **Real-Valued & Continuous:** `ArithmeticCrossover`, `BlendCrossover` (BLX-$\alpha$), `SimulatedBinaryCrossover` (SBX)
 * **Structure-Agnostic:** `ElementwiseCrossover` (recursive multi-segment blending)
+* Functional helper: `recombine(parent_a, parent_b, strategy)`
 
-*See the [Recombination Documentation](neutral_selection/reproduction/recombination/README.md) for parameter tables and mechanics.*
-
-### 2. Mutation (`neutral_selection.reproduction.mutation`)
+### 3. Variation — Mutation (`neutral_selection.variation.mutation`)
 * **Sequence & Permutation:** `InversionMutation` (2-opt), `SwapMutation`, `ScrambleMutation`, `InsertionMutation`, `TranspositionMutation`, `DuplicationMutation`, `DeletionMutation`
 * **Real-Valued & Continuous:** `GaussianMutation`, `UniformRealMutation`, `PolynomialMutation` (NSGA-II), `CauchyMutation` (Fast EP)
 * **Binary & Discrete:** `BitFlipMutation`, `BoundaryMutation`
 * **Structure-Agnostic Mutators:** `UniformMutation`, `gaussian_noise_mutator`, `bit_flip_mutator`, `attribute_mutator`
+* Functional helper: `mutate(genome, strategy)`
 
-*See the [Mutation Documentation](neutral_selection/reproduction/mutation/README.md) for parameter tables and mechanics.*
+### 4. Environmental Replacement (`neutral_selection.replacement`)
+* `GenerationalReplacement` (Elitism / $(\mu, \lambda)$ with elite retention), `PlusReplacement` $(\mu + \lambda)$, `CommaReplacement` $(\mu, \lambda)$, `SteadyStateReplacement`
+* Functional helper: `replace(parents, offspring, strategy, target_size=None)`
 
-### 3. Selection (`neutral_selection.reproduction.selection`)
-* **Parent Selection:** `TournamentSelection`, `RouletteWheelSelection`, `StochasticUniversalSamplingSelection` (SUS), `LinearRankSelection`, `ExponentialRankSelection`, `TruncationSelection`, `ElitistSelection`, `RandomSelection`, `BoltzmannSelection`
-* **Survivor Replacement:** `GenerationalReplacement` (Elitism), `PlusReplacement` $(\mu + \lambda)$, `CommaReplacement` $(\mu, \lambda)$, `SteadyStateReplacement`
-
-*See the [Selection Documentation](neutral_selection/reproduction/selection/README.md) for parameter tables and mechanics.*
+### 5. Generational Pipeline & Declarative Builders (`neutral_selection.pipeline`, `neutral_selection.builders`)
+* `GenerationPipeline`: Coordinates parent selection, variation (crossover + mutation), evaluation, and survivor replacement.
+* Functional helper: `step(parents, selection_strategy, ...)`
+* Builders: `build_selection_strategy`, `build_crossover_strategy`, `build_mutation_strategy`, `build_replacement_strategy`, `build_pipeline`
 
 ---
 
@@ -108,17 +113,16 @@ blend_fn = lambda s1, s2: segment_crossovers[s1.key](s1, s2)
 child_1, child_2 = recombine(parent_1, parent_2, ElementwiseCrossover(blend_fn=blend_fn))
 ```
 
-### 3. Parent & Survivor Selection
+### 3. Parent Selection & Replacement
 ```python
 from neutral_selection import (
     Individual,
     Population,
     TournamentSelection,
     GenerationalReplacement,
-    select_survivors,
+    replace,
 )
 
-# Population of evaluated candidates
 pop = Population([
     Individual(genome=Genome([1, 2, 3]), fitness=12.5),
     Individual(genome=Genome([4, 5, 6]), fitness=8.2),
@@ -131,11 +135,30 @@ mating_pairs = tournament.select_pairs(pop, num_pairs=2)
 
 # Environmental replacement (carrying over top 1 elite)
 survivor_strategy = GenerationalReplacement(num_elites=1)
-next_generation = select_survivors(
+next_generation = replace(
     parents=pop,
     offspring=offspring_pool,
     strategy=survivor_strategy,
 )
+```
+
+### 4. Full Generational Step
+```python
+from neutral_selection import (
+    GenerationPipeline,
+    TournamentSelection,
+    UniformCrossover,
+    GaussianMutation,
+)
+
+pipeline = GenerationPipeline(
+    selection_strategy=TournamentSelection(tournament_size=2),
+    crossover_strategy=UniformCrossover(swap_prob=0.5),
+    mutation_strategy=GaussianMutation(sigma=0.1),
+    elitism=1,
+)
+
+next_gen = pop.step(pipeline=pipeline)
 ```
 
 ---

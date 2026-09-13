@@ -13,8 +13,6 @@ class TruncationSelection(SelectionStrategy):
 
     Sorts the population by fitness and restricts the candidate pool to the top `top_k` individuals
     or top `top_ratio` percentage of the population. Individuals are sampled uniformly from this pool.
-
-    Widely used in Evolution Strategies (ES) and Breeder Genetic Algorithms (BGA).
     """
 
     def __init__(
@@ -93,8 +91,6 @@ class ElitistSelection(SelectionStrategy):
 
     Deterministically selects the top `k` (or top `num_elites` / `elite_ratio`) fittest unique
     individuals directly from the population without replacement.
-
-    This ensures preservation of top-performing genetic material into subsequent generations or mating pools.
     """
 
     def __init__(

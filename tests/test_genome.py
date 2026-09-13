@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.reproduction.recombination import ElementwiseCrossover, NPointCrossover, RandomNPointCrossover
-from neutral_selection.reproduction.mutation import mutate, UniformMutation, InversionMutation, SwapMutation, ScrambleMutation, gaussian_noise_mutator, bit_flip_mutator, attribute_mutator
-
+from neutral_selection.variation.recombination import ElementwiseCrossover, NPointCrossover, RandomNPointCrossover
+from neutral_selection.variation.mutation import mutate, UniformMutation, InversionMutation, SwapMutation, ScrambleMutation, gaussian_noise_mutator, bit_flip_mutator, attribute_mutator
 
 
 @dataclass
@@ -168,7 +167,6 @@ class TestVariationStrategies(unittest.TestCase):
         strategy = ScrambleMutation()
 
         # Mock random shuffle to reverse the scramble slice (index 1 to 4 -> [2, 3, 4])
-        # random.shuffle works in-place; we mock it to reverse the input list
         def mock_shuffle(x: list) -> None:
             x.reverse()
 

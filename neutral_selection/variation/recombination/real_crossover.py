@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Optional, Tuple
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.reproduction.recombination.base import RecombinationStrategy
+from .base import RecombinationStrategy
 
 
 def clone_genome_structure(original: Genome, new_items: list) -> Genome:

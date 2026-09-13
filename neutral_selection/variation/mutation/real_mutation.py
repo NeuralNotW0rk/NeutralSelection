@@ -4,7 +4,7 @@ import math
 import random
 from typing import Optional, Tuple
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.reproduction.mutation.base import MutationStrategy
+from .base import MutationStrategy
 
 
 def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -215,7 +215,6 @@ class CauchyMutation(MutationStrategy):
             if not isinstance(val, (int, float)) or isinstance(val, bool):
                 raise TypeError(f"CauchyMutation requires numeric genome elements, got {type(val).__name__}.")
             if random.random() < self.mutation_rate:
-                # Standard Cauchy variate using inverse CDF tan(pi * (u - 0.5))
                 u = random.random()
                 cauchy_noise = self.scale * math.tan(math.pi * (u - 0.5))
                 new_val = _clamp(float(val) + cauchy_noise, self.bounds)

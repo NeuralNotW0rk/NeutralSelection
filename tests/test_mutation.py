@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 import unittest.mock as mock
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.reproduction.mutation import (
+from neutral_selection.variation.mutation import (
     mutate,
     InversionMutation,
     SwapMutation,

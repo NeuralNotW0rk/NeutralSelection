@@ -1,8 +1,6 @@
 from .base import (
     SelectionStrategy,
-    SurvivorStrategy,
     select,
-    select_survivors,
 )
 from .tournament import TournamentSelection
 from .proportionate import (
@@ -19,18 +17,10 @@ from .truncation import (
 )
 from .uniform import RandomSelection
 from .boltzmann import BoltzmannSelection
-from .survivor import (
-    GenerationalReplacement,
-    PlusReplacement,
-    CommaReplacement,
-    SteadyStateReplacement,
-)
 
 __all__ = [
     "SelectionStrategy",
-    "SurvivorStrategy",
     "select",
-    "select_survivors",
     "TournamentSelection",
     "RouletteWheelSelection",
     "StochasticUniversalSamplingSelection",
@@ -40,8 +30,4 @@ __all__ = [
     "ElitistSelection",
     "RandomSelection",
     "BoltzmannSelection",
-    "GenerationalReplacement",
-    "PlusReplacement",
-    "CommaReplacement",
-    "SteadyStateReplacement",
 ]

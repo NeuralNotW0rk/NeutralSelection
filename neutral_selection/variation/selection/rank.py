@@ -16,9 +16,6 @@ class LinearRankSelection(SelectionStrategy):
         p(i) = (1 / N) * ((2 - s) + 2 * (s - 1) * (i / (N - 1)))
     where i in [0, N-1] is the 0-indexed rank from worst to best, and s in [1.0, 2.0] is the
     selection pressure parameter (1.0 = uniform random, 2.0 = maximum linear bias toward top rank).
-
-    Linear ranking avoids stagnation when fitness differences are tiny, and avoids premature
-    convergence when a "super-individual" is present.
     """
 
     def __init__(
@@ -49,7 +46,6 @@ class LinearRankSelection(SelectionStrategy):
         _validate_fitnesses(inds)
         _validate_k(k)
 
-        # Sort so that index 0 is worst, index N-1 is best
         sorted_inds = sorted(
             inds,
             key=lambda ind: ind.fitness,  # type: ignore[return-value]
@@ -86,7 +82,6 @@ class ExponentialRankSelection(SelectionStrategy):
     Assigns selection probabilities exponentially according to rank:
         w(i) = c ** (N - 1 - i)
     where i in [0, N-1] is the rank from worst to best, and c in (0.0, 1.0) is the base parameter.
-    Smaller c values create steeper selection pressure towards top ranks.
     """
 
     def __init__(
@@ -113,7 +108,6 @@ class ExponentialRankSelection(SelectionStrategy):
         _validate_fitnesses(inds)
         _validate_k(k)
 
-        # Sort so that index 0 is worst, index N-1 is best
         sorted_inds = sorted(
             inds,
             key=lambda ind: ind.fitness,  # type: ignore[return-value]
