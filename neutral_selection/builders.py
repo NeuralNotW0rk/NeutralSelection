@@ -1,65 +1,66 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+import inspect
+from typing import Any, Optional, Type, TypeVar, Union
 
-from neutral_selection.variation.selection import (
-    SelectionStrategy,
-    TournamentSelection,
-    RouletteWheelSelection,
-    StochasticUniversalSamplingSelection,
-    LinearRankSelection,
-    ExponentialRankSelection,
-    TruncationSelection,
-    ElitistSelection,
-    RandomSelection,
-    BoltzmannSelection,
+from neutral_selection.registry import (
+    get_selection_strategy,
+    get_crossover_strategy,
+    get_mutation_strategy,
+    get_replacement_strategy,
 )
-from neutral_selection.variation.recombination import (
-    RecombinationStrategy,
-    RandomNPointCrossover,
-    NPointCrossover,
-    OnePointCrossover,
-    TwoPointCrossover,
-    UniformCrossover,
-    ShuffleCrossover,
-    ArithmeticCrossover,
-    BlendCrossover,
-    SimulatedBinaryCrossover,
-    OrderCrossover,
-    PartiallyMatchedCrossover,
-    CycleCrossover,
-    ElementwiseCrossover,
-)
-from neutral_selection.variation.mutation import (
-    MutationStrategy,
-    UniformMutation,
-    InversionMutation,
-    SwapMutation,
-    ScrambleMutation,
-    InsertionMutation,
-    TranspositionMutation,
-    DuplicationMutation,
-    DeletionMutation,
-    GaussianMutation,
-    UniformRealMutation,
-    PolynomialMutation,
-    CauchyMutation,
-    BitFlipMutation,
-    BoundaryMutation,
-)
-from neutral_selection.replacement import (
-    ReplacementStrategy,
-    GenerationalReplacement,
-    PlusReplacement,
-    CommaReplacement,
-    SteadyStateReplacement,
-)
-from neutral_selection.pipeline import GenerationPipeline
+from neutral_selection.variation.selection import SelectionStrategy, TournamentSelection
+from neutral_selection.variation.recombination import RecombinationStrategy, ElementwiseCrossover
+from neutral_selection.variation.mutation import MutationStrategy
+from neutral_selection.replacement import ReplacementStrategy
+from neutral_selection.pipeline import EvolutionPipeline
+
+T = TypeVar("T")
+
+
+def _instantiate_from_config(
+    cls: Type[T],
+    config: dict[str, Any],
+    param_aliases: Optional[dict[str, Union[str, list[str]]]] = None,
+    defaults: Optional[dict[str, Any]] = None,
+) -> T:
+    """
+    Instantiates a strategy class using reflection on its __init__ signature,
+    extracting matching keys from config while honoring parameter aliases and defaults.
+    """
+    sig = inspect.signature(cls.__init__)
+    kwargs: dict[str, Any] = {}
+
+    alias_lookup: dict[str, list[str]] = {}
+    if param_aliases:
+        for target_param, aliases in param_aliases.items():
+            if isinstance(aliases, str):
+                alias_lookup[target_param] = [aliases]
+            else:
+                alias_lookup[target_param] = list(aliases)
+
+    for param_name, param in sig.parameters.items():
+        if param_name in ("self", "args", "kwargs"):
+            continue
+
+        if param_name in config:
+            kwargs[param_name] = config[param_name]
+        else:
+            found = False
+            for alias in alias_lookup.get(param_name, []):
+                if alias in config:
+                    kwargs[param_name] = config[alias]
+                    found = True
+                    break
+            if not found and defaults and param_name in defaults:
+                kwargs[param_name] = defaults[param_name]
+
+    return cls(**kwargs)
 
 
 def build_selection_strategy(config: dict[str, Any]) -> SelectionStrategy:
     """
-    Constructs a SelectionStrategy instance from a configuration dictionary.
+    Constructs a SelectionStrategy instance from a configuration dictionary using the Selection Registry.
 
     Args:
         config: Dictionary specifying strategy configuration (e.g. `{"type": "tournament", "tournament_size": 3}`).
@@ -71,43 +72,28 @@ def build_selection_strategy(config: dict[str, Any]) -> SelectionStrategy:
         raise TypeError(f"config must be a dictionary, got {type(config).__name__}")
 
     strategy_type = str(config.get("type", "tournament")).lower().strip()
-    minimize = bool(config.get("minimize", False))
+    cls = get_selection_strategy(strategy_type)
 
-    if strategy_type == "tournament":
-        tournament_size = config.get("tournament_size", 2)
-        return TournamentSelection(tournament_size=tournament_size, minimize=minimize)
-    elif strategy_type == "truncation":
-        top_k = config.get("top_k", config.get("k"))
-        top_ratio = config.get("top_ratio")
-        if top_k is None and top_ratio is None:
-            top_k = 2
-        return TruncationSelection(top_k=top_k, top_ratio=top_ratio, minimize=minimize)
-    elif strategy_type in ("roulette", "roulette_wheel", "proportionate"):
-        return RouletteWheelSelection(minimize=minimize)
-    elif strategy_type in ("stochastic_universal_sampling", "sus"):
-        return StochasticUniversalSamplingSelection(minimize=minimize)
-    elif strategy_type in ("linear_rank", "linear"):
-        sp = float(config.get("selection_pressure", 1.5))
-        return LinearRankSelection(selection_pressure=sp, minimize=minimize)
-    elif strategy_type in ("exponential_rank", "exponential"):
-        c = float(config.get("c", 0.9))
-        return ExponentialRankSelection(c=c, minimize=minimize)
-    elif strategy_type in ("elitist", "elite"):
-        num_elites = config.get("num_elites", config.get("k", 1))
-        elite_ratio = config.get("elite_ratio")
-        return ElitistSelection(num_elites=num_elites, elite_ratio=elite_ratio, minimize=minimize)
-    elif strategy_type == "random":
-        return RandomSelection()
-    elif strategy_type == "boltzmann":
-        temperature = float(config.get("temperature", 1.0))
-        return BoltzmannSelection(temperature=temperature, minimize=minimize)
-    else:
-        raise ValueError(f"Unknown selection strategy type: '{strategy_type}'")
+    param_aliases = {
+        "top_k": ["top_k", "k"],
+        "num_elites": ["num_elites", "k"],
+        "selection_pressure": ["selection_pressure", "sp"],
+    }
+
+    defaults: dict[str, Any] = {}
+    if cls.__name__ == "TruncationSelection":
+        if "top_k" not in config and "k" not in config and "top_ratio" not in config:
+            defaults["top_k"] = 2
+    elif cls.__name__ == "ElitistSelection":
+        if "num_elites" not in config and "k" not in config and "elite_ratio" not in config:
+            defaults["num_elites"] = 1
+
+    return _instantiate_from_config(cls, config, param_aliases=param_aliases, defaults=defaults)
 
 
 def build_crossover_strategy(config: dict[str, Any]) -> RecombinationStrategy:
     """
-    Constructs a RecombinationStrategy instance from a configuration dictionary.
+    Constructs a RecombinationStrategy instance from a configuration dictionary using the Crossover Registry.
 
     Args:
         config: Dictionary specifying crossover configuration (e.g. `{"type": "uniform", "swap_prob": 0.5}`).
@@ -119,36 +105,9 @@ def build_crossover_strategy(config: dict[str, Any]) -> RecombinationStrategy:
         raise TypeError(f"config must be a dictionary, got {type(config).__name__}")
 
     strategy_type = str(config.get("type", "random_n_point")).lower().strip()
+    cls = get_crossover_strategy(strategy_type)
 
-    if strategy_type in ("random_n_point", "n_point"):
-        num_cut_points = config.get("num_cut_points", 1)
-        return RandomNPointCrossover(num_cut_points=num_cut_points)
-    elif strategy_type == "one_point":
-        return OnePointCrossover()
-    elif strategy_type == "two_point":
-        return TwoPointCrossover()
-    elif strategy_type == "uniform":
-        swap_prob = float(config.get("swap_prob", 0.5))
-        return UniformCrossover(swap_prob=swap_prob)
-    elif strategy_type == "shuffle":
-        return ShuffleCrossover()
-    elif strategy_type == "arithmetic":
-        alpha = float(config.get("alpha", 0.5))
-        return ArithmeticCrossover(alpha=alpha)
-    elif strategy_type == "blend":
-        alpha = float(config.get("alpha", 0.5))
-        return BlendCrossover(alpha=alpha)
-    elif strategy_type in ("simulated_binary", "sbx"):
-        eta_c = float(config.get("eta_c", 20.0))
-        bounds = config.get("bounds")
-        return SimulatedBinaryCrossover(eta_c=eta_c, bounds=bounds)
-    elif strategy_type in ("order", "ox"):
-        return OrderCrossover()
-    elif strategy_type in ("pmx", "partially_matched"):
-        return PartiallyMatchedCrossover()
-    elif strategy_type in ("cycle", "cx"):
-        return CycleCrossover()
-    elif strategy_type == "elementwise":
+    if issubclass(cls, ElementwiseCrossover):
         sub_crossovers_raw = config.get("sub_crossovers", {})
         sub_crossovers = {
             k: build_crossover_strategy(v) if isinstance(v, dict) else v
@@ -160,14 +119,14 @@ def build_crossover_strategy(config: dict[str, Any]) -> RecombinationStrategy:
             if isinstance(default_crossover_raw, dict)
             else default_crossover_raw
         )
-        return ElementwiseCrossover(sub_crossovers=sub_crossovers, default_crossover=default_crossover)
-    else:
-        raise ValueError(f"Unknown crossover strategy type: '{strategy_type}'")
+        return cls(sub_crossovers=sub_crossovers, default_crossover=default_crossover)
+
+    return _instantiate_from_config(cls, config)
 
 
 def build_mutation_strategy(config: dict[str, Any]) -> MutationStrategy:
     """
-    Constructs a MutationStrategy instance from a configuration dictionary.
+    Constructs a MutationStrategy instance from a configuration dictionary using the Mutation Registry.
 
     Args:
         config: Dictionary specifying mutation configuration (e.g. `{"type": "gaussian", "sigma": 0.05}`).
@@ -179,56 +138,29 @@ def build_mutation_strategy(config: dict[str, Any]) -> MutationStrategy:
         raise TypeError(f"config must be a dictionary, got {type(config).__name__}")
 
     strategy_type = str(config.get("type", "gaussian")).lower().strip()
-    rate = float(config.get("mutation_rate", config.get("rate", 1.0)))
+    cls = get_mutation_strategy(strategy_type)
 
-    if strategy_type == "gaussian":
-        sigma = float(config.get("sigma", config.get("noise", 0.1)))
-        bounds = config.get("bounds")
-        return GaussianMutation(sigma=sigma, mutation_rate=rate, bounds=bounds)
-    elif strategy_type in ("uniform_real", "real_uniform"):
-        delta = float(config.get("delta", 1.0))
-        bounds = config.get("bounds")
-        return UniformRealMutation(delta=delta, mutation_rate=rate, bounds=bounds)
-    elif strategy_type == "polynomial":
-        eta_m = float(config.get("eta_m", 20.0))
-        bounds = config.get("bounds", (-1.0, 1.0))
-        return PolynomialMutation(eta_m=eta_m, bounds=bounds, mutation_rate=rate)
-    elif strategy_type == "cauchy":
-        scale = float(config.get("scale", config.get("gamma", 0.1)))
-        bounds = config.get("bounds")
-        return CauchyMutation(scale=scale, mutation_rate=rate, bounds=bounds)
-    elif strategy_type in ("bit_flip", "bitflip", "binary"):
-        flip_prob = float(config.get("flip_prob", 0.05))
-        return BitFlipMutation(flip_prob=flip_prob, mutation_rate=rate)
-    elif strategy_type == "boundary":
-        bounds = config.get("bounds", (0.0, 1.0))
-        return BoundaryMutation(bounds=bounds, mutation_rate=rate)
-    elif strategy_type == "uniform":
-        fn = config.get("mutation_fn")
-        if fn is None:
-            raise ValueError("UniformMutation requires 'mutation_fn' in config.")
-        return UniformMutation(mutation_rate=rate, mutation_fn=fn)
-    elif strategy_type == "inversion":
-        return InversionMutation(mutation_rate=rate)
-    elif strategy_type == "swap":
-        return SwapMutation(mutation_rate=rate)
-    elif strategy_type == "scramble":
-        return ScrambleMutation(mutation_rate=rate)
-    elif strategy_type == "insertion":
-        return InsertionMutation(mutation_rate=rate)
-    elif strategy_type == "transposition":
-        return TranspositionMutation(mutation_rate=rate)
-    elif strategy_type == "duplication":
-        return DuplicationMutation(mutation_rate=rate)
-    elif strategy_type == "deletion":
-        return DeletionMutation(mutation_rate=rate)
-    else:
-        raise ValueError(f"Unknown mutation strategy type: '{strategy_type}'")
+    if cls.__name__ == "UniformMutation" and "mutation_fn" not in config:
+        raise ValueError("UniformMutation requires 'mutation_fn' in config.")
+
+    param_aliases = {
+        "mutation_rate": ["mutation_rate", "rate", "flip_prob"],
+        "sigma": ["sigma", "noise"],
+        "scale": ["scale", "gamma"],
+    }
+
+    defaults: dict[str, Any] = {}
+    if cls.__name__ == "PolynomialMutation" and "bounds" not in config:
+        defaults["bounds"] = (-1.0, 1.0)
+    elif cls.__name__ == "BoundaryMutation" and "bounds" not in config:
+        defaults["bounds"] = (0.0, 1.0)
+
+    return _instantiate_from_config(cls, config, param_aliases=param_aliases, defaults=defaults)
 
 
 def build_replacement_strategy(config: dict[str, Any]) -> ReplacementStrategy:
     """
-    Constructs a ReplacementStrategy instance from a configuration dictionary.
+    Constructs a ReplacementStrategy instance from a configuration dictionary using the Replacement Registry.
 
     Args:
         config: Dictionary specifying replacement configuration (e.g. `{"type": "generational", "num_elites": 1}`).
@@ -240,31 +172,24 @@ def build_replacement_strategy(config: dict[str, Any]) -> ReplacementStrategy:
         raise TypeError(f"config must be a dictionary, got {type(config).__name__}")
 
     strategy_type = str(config.get("type", "generational")).lower().strip()
-    minimize = bool(config.get("minimize", False))
+    cls = get_replacement_strategy(strategy_type)
 
-    if strategy_type in ("generational", "generational_replacement"):
-        num_elites = config.get("num_elites", config.get("elitism", 0))
-        elite_ratio = config.get("elite_ratio")
-        return GenerationalReplacement(num_elites=num_elites, elite_ratio=elite_ratio, minimize=minimize)
-    elif strategy_type in ("plus", "mu_plus_lambda", "plus_replacement"):
-        return PlusReplacement(minimize=minimize)
-    elif strategy_type in ("comma", "mu_comma_lambda", "comma_replacement"):
-        return CommaReplacement(minimize=minimize)
-    elif strategy_type in ("steady_state", "steady_state_replacement"):
-        return SteadyStateReplacement(minimize=minimize)
-    else:
-        raise ValueError(f"Unknown replacement strategy type: '{strategy_type}'")
+    param_aliases = {
+        "num_elites": ["num_elites", "elitism"],
+    }
+
+    return _instantiate_from_config(cls, config, param_aliases=param_aliases)
 
 
-def build_pipeline(config: dict[str, Any]) -> GenerationPipeline:
+def build_pipeline(config: dict[str, Any]) -> EvolutionPipeline:
     """
-    Constructs a GenerationPipeline instance from a nested configuration dictionary.
+    Constructs an EvolutionPipeline instance from a nested configuration dictionary.
 
     Args:
         config: Dictionary with configuration keys for selection, crossover, mutation, replacement, etc.
 
     Returns:
-        The configured GenerationPipeline instance.
+        The configured EvolutionPipeline instance.
     """
     if not isinstance(config, dict):
         raise TypeError(f"config must be a dictionary, got {type(config).__name__}")
@@ -315,7 +240,7 @@ def build_pipeline(config: dict[str, Any]) -> GenerationPipeline:
         elitism = int(config.get("elitism", 0))
         elite_ratio = config.get("elite_ratio")
 
-    return GenerationPipeline(
+    return EvolutionPipeline(
         selection_strategy=selection_strat,
         crossover_strategy=crossover_strat,
         mutation_strategy=mutation_strat,

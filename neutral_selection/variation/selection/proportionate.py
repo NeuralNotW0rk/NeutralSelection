@@ -6,6 +6,7 @@ from typing import Optional, Sequence, Union
 from neutral_selection.representation.individual import Individual
 from neutral_selection.representation.population import Population
 from .base import SelectionStrategy, _extract_individuals, _validate_fitnesses, _validate_k
+from neutral_selection.registry import register_selection
 
 
 def _prepare_proportionate_weights(
@@ -44,6 +45,7 @@ def _prepare_proportionate_weights(
     return weights
 
 
+@register_selection(["roulette", "roulette_wheel", "proportionate"])
 class RouletteWheelSelection(SelectionStrategy):
     """
     Fitness-Proportionate / Roulette Wheel Selection strategy.
@@ -104,6 +106,7 @@ class RouletteWheelSelection(SelectionStrategy):
         return selected
 
 
+@register_selection(["stochastic_universal_sampling", "sus"])
 class StochasticUniversalSamplingSelection(SelectionStrategy):
     """
     Stochastic Universal Sampling (SUS) Selection strategy (Baker, 1987).

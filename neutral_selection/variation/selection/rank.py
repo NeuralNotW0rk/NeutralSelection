@@ -6,8 +6,10 @@ from typing import Sequence, Union
 from neutral_selection.representation.individual import Individual
 from neutral_selection.representation.population import Population
 from .base import SelectionStrategy, _extract_individuals, _validate_fitnesses, _validate_k
+from neutral_selection.registry import register_selection
 
 
+@register_selection(["linear_rank", "linear"])
 class LinearRankSelection(SelectionStrategy):
     """
     Linear Rank Selection strategy (Baker, 1985; Whitley, 1989).
@@ -75,6 +77,7 @@ class LinearRankSelection(SelectionStrategy):
         return selected
 
 
+@register_selection(["exponential_rank", "exponential"])
 class ExponentialRankSelection(SelectionStrategy):
     """
     Exponential Rank Selection strategy (Blickle & Thiele, 1995).

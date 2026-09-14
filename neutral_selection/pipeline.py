@@ -18,12 +18,12 @@ from neutral_selection.replacement.base import ReplacementStrategy
 from neutral_selection.replacement.generational import GenerationalReplacement
 
 
-class GenerationPipeline:
+class EvolutionPipeline:
     """
     Coordinates parent selection, variation (recombination and mutation), evaluation, and survivor replacement
-    to advance an evolutionary population by one generation.
+    to advance an evolutionary population by one step.
 
-    The generational step is executed in two decoupled phases:
+    The evolutionary step is executed in two decoupled phases:
     1. Variation Phase: Selects parents and produces candidate offspring via crossover, mutation, and optional evaluation.
     2. Replacement Phase: Delegates next-generation survivor selection to the configured ReplacementStrategy
        (e.g., GenerationalReplacement with elitism, PlusReplacement, CommaReplacement, SteadyStateReplacement).
@@ -120,7 +120,7 @@ class GenerationPipeline:
         parent_ids: Optional[Sequence[str]] = None,
     ) -> Population:
         """
-        Advances the parent population by one generation.
+        Advances the parent population by one step.
 
         Args:
             parents: Parent Population or sequence of parent Individuals.
@@ -290,7 +290,7 @@ def step(
     parent_ids: Optional[Sequence[str]] = None,
 ) -> Population:
     """
-    Functional helper to advance an evolutionary population by one generation.
+    Functional helper to advance an evolutionary population by one step.
 
     Args:
         parents: Parent Population or sequence of parent Individuals.
@@ -310,7 +310,7 @@ def step(
     Returns:
         A new Population of surviving individuals for the next generation.
     """
-    pipeline = GenerationPipeline(
+    pipeline = EvolutionPipeline(
         selection_strategy=selection_strategy,
         crossover_strategy=crossover_strategy,
         mutation_strategy=mutation_strategy,

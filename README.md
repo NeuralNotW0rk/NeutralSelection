@@ -50,10 +50,11 @@ Existing Python evolutionary libraries often fall into two extremes:
 * `GenerationalReplacement` (Elitism / $(\mu, \lambda)$ with elite retention), `PlusReplacement` $(\mu + \lambda)$, `CommaReplacement` $(\mu, \lambda)$, `SteadyStateReplacement`
 * Functional helper: `replace(parents, offspring, strategy, target_size=None)`
 
-### 5. Generational Pipeline & Declarative Builders (`neutral_selection.pipeline`, `neutral_selection.builders`)
-* `GenerationPipeline`: Coordinates parent selection, variation (crossover + mutation), evaluation, and survivor replacement.
+### 5. Evolution Pipeline & Declarative Builders (`neutral_selection.pipeline`, `neutral_selection.builders`, `neutral_selection.registry`)
+* `EvolutionPipeline`: Coordinates parent selection, variation (crossover + mutation), evaluation, and survivor replacement.
 * Functional helper: `step(parents, selection_strategy, ...)`
 * Builders: `build_selection_strategy`, `build_crossover_strategy`, `build_mutation_strategy`, `build_replacement_strategy`, `build_pipeline`
+* Extensible Registries: `@register_selection`, `@register_crossover`, `@register_mutation`, `@register_replacement` for registering custom user strategies seamlessly.
 
 ---
 
@@ -142,16 +143,16 @@ next_generation = replace(
 )
 ```
 
-### 4. Full Generational Step
+### 4. Full Evolutionary Step
 ```python
 from neutral_selection import (
-    GenerationPipeline,
+    EvolutionPipeline,
     TournamentSelection,
     UniformCrossover,
     GaussianMutation,
 )
 
-pipeline = GenerationPipeline(
+pipeline = EvolutionPipeline(
     selection_strategy=TournamentSelection(tournament_size=2),
     crossover_strategy=UniformCrossover(swap_prob=0.5),
     mutation_strategy=GaussianMutation(sigma=0.1),

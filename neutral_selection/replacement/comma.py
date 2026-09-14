@@ -4,8 +4,10 @@ from typing import Optional, Sequence, Union
 from neutral_selection.representation.individual import Individual
 from neutral_selection.representation.population import Population
 from .base import ReplacementStrategy, _extract_individuals, _validate_fitnesses, _validate_k
+from neutral_selection.registry import register_replacement
 
 
+@register_replacement(["comma", "mu_comma_lambda", "comma_replacement"])
 class CommaReplacement(ReplacementStrategy):
     """
     (mu, lambda) Replacement strategy (Evolution Strategies).

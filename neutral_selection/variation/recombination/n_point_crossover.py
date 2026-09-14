@@ -4,6 +4,7 @@ import random
 from typing import Optional, Sequence, Tuple, Union
 from neutral_selection.representation.genome import Genome, Segment
 from .base import RecombinationStrategy
+from neutral_selection.registry import register_crossover
 
 
 def clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -56,6 +57,7 @@ def n_point_crossover(parent_a: Genome, parent_b: Genome, cut_points: list[int])
     )
 
 
+@register_crossover("one_point")
 class OnePointCrossover(RecombinationStrategy):
     """
     One-Point Crossover strategy (Holland, 1975).
@@ -84,6 +86,7 @@ class OnePointCrossover(RecombinationStrategy):
         return n_point_crossover(parent_a, parent_b, [cut])
 
 
+@register_crossover("two_point")
 class TwoPointCrossover(RecombinationStrategy):
     """
     Two-Point Crossover strategy (De Jong, 1975).
@@ -120,6 +123,7 @@ class TwoPointCrossover(RecombinationStrategy):
         return n_point_crossover(parent_a, parent_b, cuts)
 
 
+@register_crossover("fixed_n_point")
 class NPointCrossover(RecombinationStrategy):
     """A structural crossover strategy that applies N-point sequence crossover at deterministic cut points."""
 
@@ -134,6 +138,7 @@ class NPointCrossover(RecombinationStrategy):
         return n_point_crossover(parent_a, parent_b, self.cut_points)
 
 
+@register_crossover(["random_n_point", "n_point"])
 class RandomNPointCrossover(RecombinationStrategy):
     """Applies structural N-point crossover to parent genomes with randomly selected cut points."""
 
@@ -158,6 +163,7 @@ class RandomNPointCrossover(RecombinationStrategy):
         return n_point_crossover(parent_a, parent_b, cut_points)
 
 
+@register_crossover("uniform")
 class UniformCrossover(RecombinationStrategy):
     """
     Uniform Crossover strategy (Syswerda, 1989).
@@ -196,6 +202,7 @@ class UniformCrossover(RecombinationStrategy):
         )
 
 
+@register_crossover("shuffle")
 class ShuffleCrossover(RecombinationStrategy):
     """
     Shuffle Crossover strategy (Eshelman, Caruana & Schaffer, 1989).

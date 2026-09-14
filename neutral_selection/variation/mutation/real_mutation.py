@@ -5,6 +5,7 @@ import random
 from typing import Optional, Tuple
 from neutral_selection.representation.genome import Genome, Segment
 from .base import MutationStrategy
+from neutral_selection.registry import register_mutation
 
 
 def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -22,6 +23,7 @@ def _clamp(val: float, bounds: Optional[Tuple[float, float]]) -> float:
     return max(low, min(high, val))
 
 
+@register_mutation(["gaussian", "normal"])
 class GaussianMutation(MutationStrategy):
     """
     Gaussian mutation strategy (Evolution Strategies).
@@ -66,6 +68,7 @@ class GaussianMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["uniform_real", "real_uniform"])
 class UniformRealMutation(MutationStrategy):
     """
     Uniform real-valued mutation strategy.
@@ -111,6 +114,7 @@ class UniformRealMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["polynomial", "pm"])
 class PolynomialMutation(MutationStrategy):
     """
     Polynomial mutation strategy (Deb & Agrawal, 1995; Deb, 2001 - NSGA-II).
@@ -179,6 +183,7 @@ class PolynomialMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["cauchy", "cauchy_mutation"])
 class CauchyMutation(MutationStrategy):
     """
     Cauchy mutation strategy (Fast Evolutionary Programming - Yao & Liu, 1996).

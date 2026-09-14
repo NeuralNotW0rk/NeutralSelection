@@ -68,7 +68,7 @@ from .replacement import (
     SteadyStateReplacement,
 )
 from .pipeline import (
-    GenerationPipeline,
+    EvolutionPipeline,
     step,
 )
 from .builders import (
@@ -77,6 +77,20 @@ from .builders import (
     build_mutation_strategy,
     build_replacement_strategy,
     build_pipeline,
+)
+from .registry import (
+    register_selection,
+    get_selection_strategy,
+    list_selection_strategies,
+    register_crossover,
+    get_crossover_strategy,
+    list_crossover_strategies,
+    register_mutation,
+    get_mutation_strategy,
+    list_mutation_strategies,
+    register_replacement,
+    get_replacement_strategy,
+    list_replacement_strategies,
 )
 
 __all__ = [
@@ -145,7 +159,7 @@ __all__ = [
     "CommaReplacement",
     "SteadyStateReplacement",
     # Pipeline
-    "GenerationPipeline",
+    "EvolutionPipeline",
     "step",
     # Declarative Builders
     "build_selection_strategy",
@@ -153,4 +167,18 @@ __all__ = [
     "build_mutation_strategy",
     "build_replacement_strategy",
     "build_pipeline",
+    # Registry
+    "register_selection",
+    "get_selection_strategy",
+    "list_selection_strategies",
+    "register_crossover",
+    "get_crossover_strategy",
+    "list_crossover_strategies",
+    "register_mutation",
+    "get_mutation_strategy",
+    "list_mutation_strategies",
+    "register_replacement",
+    "get_replacement_strategy",
+    "list_replacement_strategies",
 ]
+

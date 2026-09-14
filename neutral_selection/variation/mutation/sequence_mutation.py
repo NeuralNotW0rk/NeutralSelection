@@ -4,6 +4,7 @@ import random
 from typing import Optional
 from neutral_selection.representation.genome import Genome, Segment
 from .base import MutationStrategy
+from neutral_selection.registry import register_mutation
 
 
 def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -13,6 +14,7 @@ def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
     return original.__class__(new_items)
 
 
+@register_mutation(["inversion", "2opt"])
 class InversionMutation(MutationStrategy):
     """
     Inversion mutation strategy (2-opt reversal).
@@ -37,6 +39,7 @@ class InversionMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["swap", "exchange"])
 class SwapMutation(MutationStrategy):
     """
     Swap mutation strategy (Exchange mutation).
@@ -61,6 +64,7 @@ class SwapMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["scramble", "shuffle"])
 class ScrambleMutation(MutationStrategy):
     """
     Scramble mutation strategy.
@@ -88,6 +92,7 @@ class ScrambleMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["insertion", "displacement"])
 class InsertionMutation(MutationStrategy):
     """
     Insertion mutation strategy (Displacement mutation).
@@ -113,6 +118,7 @@ class InsertionMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["transposition", "block_swap"])
 class TranspositionMutation(MutationStrategy):
     """
     Transposition mutation strategy (Block swap mutation).
@@ -154,6 +160,7 @@ class TranspositionMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["duplication", "duplicate"])
 class DuplicationMutation(MutationStrategy):
     """
     Duplication mutation strategy.
@@ -191,6 +198,7 @@ class DuplicationMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["deletion", "delete"])
 class DeletionMutation(MutationStrategy):
     """
     Deletion mutation strategy.

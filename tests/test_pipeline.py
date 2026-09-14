@@ -23,7 +23,7 @@ from neutral_selection.replacement import (
     GenerationalReplacement,
     PlusReplacement,
 )
-from neutral_selection.pipeline import GenerationPipeline, step
+from neutral_selection.pipeline import EvolutionPipeline, step
 from neutral_selection.builders import (
     build_selection_strategy,
     build_crossover_strategy,
@@ -38,7 +38,7 @@ def _make_ind(items: list[float], fitness: float | None = None, ind_id: str | No
     return Individual(Genome(list(items)), fitness=fitness, metadata=metadata)
 
 
-class TestGenerationPipeline(unittest.TestCase):
+class TestEvolutionPipeline(unittest.TestCase):
 
     def test_basic_step_and_lineage_tracking(self) -> None:
         p1 = _make_ind([1.0, 1.0, 1.0], fitness=10.0, ind_id="p1")
@@ -77,7 +77,7 @@ class TestGenerationPipeline(unittest.TestCase):
         p3 = _make_ind([3.0, 3.0], fitness=30.0, ind_id="p3")
         parents = [p1, p2, p3]
 
-        pipeline = GenerationPipeline(
+        pipeline = EvolutionPipeline(
             selection_strategy=TournamentSelection(tournament_size=2),
             crossover_strategy=UniformCrossover(swap_prob=0.5),
             mutation_strategy=GaussianMutation(sigma=0.5),
@@ -126,7 +126,7 @@ class TestGenerationPipeline(unittest.TestCase):
         parents = Population([p1, p2])
 
         # Use PlusReplacement with evaluate_fn
-        pipeline = GenerationPipeline(
+        pipeline = EvolutionPipeline(
             selection_strategy=TournamentSelection(tournament_size=2),
             evaluate_fn=lambda ind: sum(ind.genotype),
             replacement_strategy=PlusReplacement(),
@@ -169,7 +169,7 @@ class TestGenerationPipeline(unittest.TestCase):
             "crossover_prob": 0.8,
             "elitism": 1,
         })
-        self.assertIsInstance(pipeline, GenerationPipeline)
+        self.assertIsInstance(pipeline, EvolutionPipeline)
         self.assertEqual(pipeline.crossover_prob, 0.8)
         self.assertEqual(pipeline.elitism, 1)
 
@@ -187,11 +187,11 @@ class TestGenerationPipeline(unittest.TestCase):
 
         # Invalid crossover_prob
         with self.assertRaises(ValueError):
-            GenerationPipeline(selection_strategy=sel, crossover_prob=1.5)
+            EvolutionPipeline(selection_strategy=sel, crossover_prob=1.5)
 
         # Invalid mutation_prob
         with self.assertRaises(ValueError):
-            GenerationPipeline(selection_strategy=sel, mutation_prob=-0.1)
+            EvolutionPipeline(selection_strategy=sel, mutation_prob=-0.1)
 
         # Invalid elitism > pop size
         with self.assertRaises(ValueError):
@@ -203,11 +203,11 @@ class TestGenerationPipeline(unittest.TestCase):
 
         # Invalid strategy types
         with self.assertRaises(TypeError):
-            GenerationPipeline(selection_strategy="not-a-strategy")  # type: ignore
+            EvolutionPipeline(selection_strategy="not-a-strategy")  # type: ignore
 
         # Conflicting custom replacement strategy and elitism
         with self.assertRaises(ValueError):
-            GenerationPipeline(
+            EvolutionPipeline(
                 selection_strategy=sel,
                 replacement_strategy=PlusReplacement(),
                 elitism=1,

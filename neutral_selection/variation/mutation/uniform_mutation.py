@@ -2,8 +2,10 @@ import random
 from typing import Callable, Any
 from neutral_selection.representation.genome import Genome, Segment
 from .base import MutationStrategy
+from neutral_selection.registry import register_mutation
 
 
+@register_mutation(["uniform", "elementwise_mutation"])
 class UniformMutation(MutationStrategy):
     """
     A structure-agnostic mutation strategy that maps a mutation function across elements recursively.

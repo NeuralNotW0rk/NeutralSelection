@@ -4,6 +4,7 @@ import random
 from typing import Optional, Tuple
 from neutral_selection.representation.genome import Genome, Segment
 from .base import RecombinationStrategy
+from neutral_selection.registry import register_crossover
 
 
 def clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -29,6 +30,7 @@ def _validate_real_parents(parent_a: Genome, parent_b: Genome) -> None:
         raise ValueError("Genomes must have the same length for crossover.")
 
 
+@register_crossover("arithmetic")
 class ArithmeticCrossover(RecombinationStrategy):
     """
     Arithmetic Crossover strategy (Michalewicz, 1992).
@@ -66,6 +68,7 @@ class ArithmeticCrossover(RecombinationStrategy):
         )
 
 
+@register_crossover("blend")
 class BlendCrossover(RecombinationStrategy):
     """
     Blend Crossover strategy (BLX-alpha - Eshelman & Schaffer, 1993).
@@ -117,6 +120,7 @@ class BlendCrossover(RecombinationStrategy):
         )
 
 
+@register_crossover(["simulated_binary", "sbx"])
 class SimulatedBinaryCrossover(RecombinationStrategy):
     """
     Simulated Binary Crossover strategy (SBX - Deb & Agrawal, 1995; Deb & Beyer, 2001).

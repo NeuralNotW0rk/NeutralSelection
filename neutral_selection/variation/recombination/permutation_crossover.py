@@ -4,6 +4,7 @@ import random
 from typing import Sequence, Tuple
 from neutral_selection.representation.genome import Genome, Segment
 from .base import RecombinationStrategy
+from neutral_selection.registry import register_crossover
 
 
 def clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -22,6 +23,7 @@ def _validate_permutation_parents(parent_a: Genome, parent_b: Genome) -> int:
     return len(parent_a)
 
 
+@register_crossover(["order", "ox", "order_1"])
 class OrderCrossover(RecombinationStrategy):
     """
     Order Crossover strategy (OX1 - Davis, 1985).
@@ -64,6 +66,7 @@ class OrderCrossover(RecombinationStrategy):
         )
 
 
+@register_crossover(["partially_matched", "pmx"])
 class PartiallyMatchedCrossover(RecombinationStrategy):
     """
     Partially Matched Crossover strategy (PMX - Goldberg & Lingle, 1985).
@@ -108,6 +111,7 @@ class PartiallyMatchedCrossover(RecombinationStrategy):
         )
 
 
+@register_crossover(["cycle", "cx"])
 class CycleCrossover(RecombinationStrategy):
     """
     Cycle Crossover strategy (CX - Oliver, Smith & Holland, 1987).

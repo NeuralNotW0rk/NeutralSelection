@@ -4,6 +4,7 @@ import random
 from typing import Optional, Tuple
 from neutral_selection.representation.genome import Genome, Segment
 from .base import MutationStrategy
+from neutral_selection.registry import register_mutation
 
 
 def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -13,6 +14,7 @@ def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
     return original.__class__(new_items)
 
 
+@register_mutation(["bit_flip", "bitflip", "binary"])
 class BitFlipMutation(MutationStrategy):
     """
     Bit flip mutation strategy (Holland, 1975).
@@ -54,6 +56,7 @@ class BitFlipMutation(MutationStrategy):
         return _clone_genome_structure(genome, mutated_items)
 
 
+@register_mutation(["boundary", "boundary_mutation"])
 class BoundaryMutation(MutationStrategy):
     """
     Boundary mutation strategy (Michalewicz, 1992).

@@ -1,8 +1,10 @@
 from typing import Callable, Any
 from neutral_selection.representation.genome import Genome, Segment
 from .base import RecombinationStrategy
+from neutral_selection.registry import register_crossover
 
 
+@register_crossover("elementwise")
 class ElementwiseCrossover(RecombinationStrategy):
     """
     A structure-agnostic crossover strategy that blends elements of parent genomes recursively.

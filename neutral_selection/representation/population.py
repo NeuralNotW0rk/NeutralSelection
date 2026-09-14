@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from neutral_selection.variation.recombination.base import RecombinationStrategy
     from neutral_selection.variation.mutation.base import MutationStrategy
     from neutral_selection.replacement.base import ReplacementStrategy
-    from neutral_selection.pipeline import GenerationPipeline
+    from neutral_selection.pipeline import EvolutionPipeline
 
 
 class Population:
@@ -125,7 +125,7 @@ class Population:
 
     def step(
         self,
-        pipeline: Optional[GenerationPipeline] = None,
+        pipeline: Optional[EvolutionPipeline] = None,
         selection_strategy: Optional[SelectionStrategy] = None,
         crossover_strategy: Optional[RecombinationStrategy] = None,
         mutation_strategy: Optional[MutationStrategy] = None,
@@ -140,7 +140,7 @@ class Population:
         parent_ids: Optional[Sequence[str]] = None,
     ) -> Population:
         """
-        Advances this Population by one generation using either an existing GenerationPipeline or individual strategies.
+        Advances this Population by one step using either an existing EvolutionPipeline or individual strategies.
         """
         if pipeline is not None:
             return pipeline.step(
@@ -151,7 +151,7 @@ class Population:
             )
 
         if selection_strategy is None:
-            raise ValueError("Must provide either a GenerationPipeline instance or at least a selection_strategy.")
+            raise ValueError("Must provide either an EvolutionPipeline instance or at least a selection_strategy.")
 
         from neutral_selection.pipeline import step as _step_fn
         return _step_fn(

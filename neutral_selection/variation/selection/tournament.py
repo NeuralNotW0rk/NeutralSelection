@@ -5,8 +5,10 @@ from typing import Sequence, Union
 from neutral_selection.representation.individual import Individual
 from neutral_selection.representation.population import Population
 from .base import SelectionStrategy, _extract_individuals, _validate_fitnesses, _validate_k
+from neutral_selection.registry import register_selection
 
 
+@register_selection(["tournament", "tourn"])
 class TournamentSelection(SelectionStrategy):
     """
     Tournament Selection strategy.
