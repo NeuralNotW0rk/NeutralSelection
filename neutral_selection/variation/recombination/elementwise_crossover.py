@@ -1,4 +1,4 @@
-from typing import Callable, Any
+from typing import Callable, Any, Optional
 from neutral_selection.representation.genome import Genome, Segment
 from .base import RecombinationStrategy
 from neutral_selection.registry import register_crossover
@@ -11,15 +11,22 @@ class ElementwiseCrossover(RecombinationStrategy):
     Supports flat genomes, nested genomes, and segment hierarchies.
     """
 
-    def __init__(self, blend_factor: float, crossover_fn: Callable[[Any, Any, float], Any]) -> None:
-        if crossover_fn is None:
+    def __init__(
+        self,
+        blend_factor: float = 0.5,
+        crossover_fn: Optional[Callable[[Any, Any, float], Any]] = None,
+        *,
+        blend_fn: Optional[Callable[[Any, Any, float], Any]] = None,
+    ) -> None:
+        fn = crossover_fn if crossover_fn is not None else blend_fn
+        if fn is None:
             raise ValueError("crossover_fn must be provided and cannot be None.")
-        if not callable(crossover_fn):
+        if not callable(fn):
             raise TypeError("crossover_fn must be a callable.")
         if not isinstance(blend_factor, (int, float)):
             raise TypeError("blend_factor must be a float or int.")
         self.blend_factor = float(blend_factor)
-        self.crossover_fn = crossover_fn
+        self.crossover_fn = fn
 
     def __call__(self, parent_a: Genome, parent_b: Genome) -> Genome:
         if not isinstance(parent_a, Genome) or not isinstance(parent_b, Genome):

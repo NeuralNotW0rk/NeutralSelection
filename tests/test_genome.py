@@ -92,6 +92,12 @@ class TestVariationStrategies(unittest.TestCase):
         self.assertEqual(child[0].value, 2.5)
         self.assertEqual(child[0].tag, "A-X")
 
+        # Test with keyword blend_fn and default blend_factor (0.5)
+        strategy_kw = ElementwiseCrossover(blend_fn=blend_payload)
+        child_kw = strategy_kw(g1, g2)
+        self.assertEqual(child_kw[0].value, 2.0)
+        self.assertEqual(child_kw[0].tag, "A-X")
+
         # Fail-Fast on initialization
         with self.assertRaises(ValueError):
             ElementwiseCrossover(0.5, None)  # type: ignore

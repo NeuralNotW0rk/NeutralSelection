@@ -104,6 +104,33 @@ class TestRegistry(unittest.TestCase):
             class NotAStrategy:
                 pass
 
+    def test_build_elementwise_crossover(self):
+        from neutral_selection.variation.recombination import ElementwiseCrossover
+        dummy_fn = lambda a, b, factor: a
+
+        # Built with explicit blend_factor and crossover_fn
+        built = build_crossover_strategy({
+            "type": "elementwise",
+            "crossover_fn": dummy_fn,
+            "blend_factor": 0.8,
+        })
+        self.assertIsInstance(built, ElementwiseCrossover)
+        self.assertEqual(built.blend_factor, 0.8)
+        self.assertEqual(built.crossover_fn, dummy_fn)
+
+        # Built with blend_fn alias and default blend_factor
+        built_alias = build_crossover_strategy({
+            "type": "elementwise",
+            "blend_fn": dummy_fn,
+        })
+        self.assertIsInstance(built_alias, ElementwiseCrossover)
+        self.assertEqual(built_alias.blend_factor, 0.5)
+        self.assertEqual(built_alias.crossover_fn, dummy_fn)
+
+        # Fail-fast when crossover_fn is missing
+        with self.assertRaises(ValueError):
+            build_crossover_strategy({"type": "elementwise"})
+
 
 if __name__ == "__main__":
     unittest.main()

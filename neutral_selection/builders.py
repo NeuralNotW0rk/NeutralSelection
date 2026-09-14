@@ -10,7 +10,7 @@ from neutral_selection.registry import (
     get_replacement_strategy,
 )
 from neutral_selection.variation.selection import SelectionStrategy, TournamentSelection
-from neutral_selection.variation.recombination import RecombinationStrategy, ElementwiseCrossover
+from neutral_selection.variation.recombination import RecombinationStrategy
 from neutral_selection.variation.mutation import MutationStrategy
 from neutral_selection.replacement import ReplacementStrategy
 from neutral_selection.pipeline import EvolutionPipeline
@@ -107,21 +107,24 @@ def build_crossover_strategy(config: dict[str, Any]) -> RecombinationStrategy:
     strategy_type = str(config.get("type", "random_n_point")).lower().strip()
     cls = get_crossover_strategy(strategy_type)
 
-    if issubclass(cls, ElementwiseCrossover):
-        sub_crossovers_raw = config.get("sub_crossovers", {})
-        sub_crossovers = {
-            k: build_crossover_strategy(v) if isinstance(v, dict) else v
-            for k, v in sub_crossovers_raw.items()
-        }
-        default_crossover_raw = config.get("default_crossover")
-        default_crossover = (
-            build_crossover_strategy(default_crossover_raw)
-            if isinstance(default_crossover_raw, dict)
-            else default_crossover_raw
-        )
-        return cls(sub_crossovers=sub_crossovers, default_crossover=default_crossover)
+    if cls.__name__ == "ElementwiseCrossover" and "crossover_fn" not in config and "blend_fn" not in config and "fn" not in config:
+        raise ValueError("ElementwiseCrossover requires 'crossover_fn' in config.")
 
-    return _instantiate_from_config(cls, config)
+    param_aliases = {
+        "swap_prob": ["swap_prob", "prob"],
+        "eta_c": ["eta_c", "eta"],
+        "alpha": ["alpha", "blend_factor", "factor", "weight"],
+        "blend_factor": ["blend_factor", "factor", "alpha", "weight"],
+        "crossover_fn": ["crossover_fn", "blend_fn", "fn"],
+    }
+
+    defaults: dict[str, Any] = {}
+    if cls.__name__ == "SimulatedBinaryCrossover" and "bounds" not in config:
+        defaults["bounds"] = (-1.0, 1.0)
+    elif cls.__name__ == "ElementwiseCrossover" and not any(k in config for k in ["blend_factor", "factor", "alpha", "weight"]):
+        defaults["blend_factor"] = 0.5
+
+    return _instantiate_from_config(cls, config, param_aliases=param_aliases, defaults=defaults)
 
 
 def build_mutation_strategy(config: dict[str, Any]) -> MutationStrategy:
