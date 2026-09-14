@@ -1,5 +1,7 @@
 # NeutralSelection
 
+*"If I don't survive, tell my wife, hello."*
+
 > **A modern, strictly-typed, and composable evolutionary computation framework for Python.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
