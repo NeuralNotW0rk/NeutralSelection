@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import random
-from typing import Optional, Tuple
+import dataclasses
+from typing import Optional, Tuple, Any
 from neutral_selection.representation.genome import Genome, Segment
+from neutral_selection.representation.hierarchy import flatten_hierarchy, unflatten_hierarchy
 from .base import RecombinationStrategy
 from neutral_selection.registry import register_crossover
 
 
-def clone_genome_structure(original: Genome, new_items: list) -> Genome:
-    """Creates a new genome instance matching the type and metadata of the original."""
-    if isinstance(original, Segment):
-        return original.__class__(original.key, new_items)
-    return original.__class__(new_items)
+def _validate_composite_parent(parent: Any) -> None:
+    if isinstance(parent, (str, bytes, bytearray, int, float, bool)) or not (
+        isinstance(parent, (Genome, list, tuple))
+        or dataclasses.is_dataclass(parent)
+        or hasattr(parent, "shape")
+        or hasattr(parent, "__hierarchical_flatten__")
+    ):
+        raise TypeError(f"Parent must be a Genome, sequence, dataclass or tensor, got {type(parent).__name__}")
 
 
 def _clamp(val: float, bounds: Optional[Tuple[float, float]]) -> float:
@@ -22,14 +27,6 @@ def _clamp(val: float, bounds: Optional[Tuple[float, float]]) -> float:
     return max(low, min(high, val))
 
 
-def _validate_real_parents(parent_a: Genome, parent_b: Genome) -> None:
-    """Validates that parent genomes are non-empty numeric sequences of equal length."""
-    if not isinstance(parent_a, Genome) or not isinstance(parent_b, Genome):
-        raise TypeError("parent_a and parent_b must be Genome instances.")
-    if len(parent_a) != len(parent_b):
-        raise ValueError("Genomes must have the same length for crossover.")
-
-
 @register_crossover("arithmetic")
 class ArithmeticCrossover(RecombinationStrategy):
     """
@@ -38,23 +35,39 @@ class ArithmeticCrossover(RecombinationStrategy):
     Computes linear combinations of parent numeric vectors:
         child1 = alpha * parent_a + (1 - alpha) * parent_b
         child2 = (1 - alpha) * parent_a + alpha * parent_b
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __init__(self, alpha: float = 0.5) -> None:
+    def __init__(
+        self,
+        alpha: float = 0.5,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
         if not isinstance(alpha, (int, float)) or isinstance(alpha, bool):
             raise TypeError(f"alpha must be a float, got {type(alpha).__name__}.")
         if not (0.0 <= alpha <= 1.0):
             raise ValueError(f"alpha must be in [0.0, 1.0], got {alpha}.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
         self.alpha = float(alpha)
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, parent_a: Genome, parent_b: Genome) -> tuple[Genome, Genome]:
-        _validate_real_parents(parent_a, parent_b)
+    def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
+        _validate_composite_parent(parent_a)
+        _validate_composite_parent(parent_b)
+        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+
+        if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
+            raise ValueError("Genomes must have matching leaf structures for arithmetic crossover")
 
         child1_items = []
         child2_items = []
 
         a = self.alpha
-        for x1, x2 in zip(parent_a, parent_b):
+        for x1, x2 in zip(leaves_a, leaves_b):
             if not isinstance(x1, (int, float)) or not isinstance(x2, (int, float)) or isinstance(x1, bool) or isinstance(x2, bool):
                 raise TypeError("ArithmeticCrossover requires numeric genome elements.")
             c1 = a * float(x1) + (1.0 - a) * float(x2)
@@ -63,8 +76,8 @@ class ArithmeticCrossover(RecombinationStrategy):
             child2_items.append(c2)
 
         return (
-            clone_genome_structure(parent_a, child1_items),
-            clone_genome_structure(parent_b, child2_items),
+            unflatten_hierarchy(child1_items, treedef_a),
+            unflatten_hierarchy(child2_items, treedef_b),
         )
 
 
@@ -76,29 +89,42 @@ class BlendCrossover(RecombinationStrategy):
     For each gene, samples offspring values uniformly from:
         [c_min - alpha * d, c_max + alpha * d]
     where d = |parent_a - parent_b|, c_min = min(parent_a, parent_b), c_max = max(parent_a, parent_b).
+    Supports multi-tier hierarchical structures natively.
     """
 
     def __init__(
         self,
         alpha: float = 0.5,
         bounds: Optional[Tuple[float, float]] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
     ) -> None:
         if not isinstance(alpha, (int, float)) or isinstance(alpha, bool) or alpha < 0.0:
             raise ValueError(f"alpha must be a non-negative float (>= 0.0), got {alpha}.")
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.alpha = float(alpha)
         self.bounds = bounds
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, parent_a: Genome, parent_b: Genome) -> tuple[Genome, Genome]:
-        _validate_real_parents(parent_a, parent_b)
+    def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
+        _validate_composite_parent(parent_a)
+        _validate_composite_parent(parent_b)
+        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+
+        if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
+            raise ValueError("Genomes must have matching leaf structures for blend crossover")
 
         child1_items = []
         child2_items = []
 
-        for x1, x2 in zip(parent_a, parent_b):
+        for x1, x2 in zip(leaves_a, leaves_b):
             if not isinstance(x1, (int, float)) or not isinstance(x2, (int, float)) or isinstance(x1, bool) or isinstance(x2, bool):
                 raise TypeError("BlendCrossover requires numeric genome elements.")
 
@@ -115,8 +141,8 @@ class BlendCrossover(RecombinationStrategy):
             child2_items.append(c2)
 
         return (
-            clone_genome_structure(parent_a, child1_items),
-            clone_genome_structure(parent_b, child2_items),
+            unflatten_hierarchy(child1_items, treedef_a),
+            unflatten_hierarchy(child2_items, treedef_b),
         )
 
 
@@ -127,6 +153,7 @@ class SimulatedBinaryCrossover(RecombinationStrategy):
 
     Simulates the search behavior of single-point binary crossover in continuous search spaces.
     Standard crossover operator in NSGA-II.
+    Supports multi-tier hierarchical structures natively.
     """
 
     def __init__(
@@ -134,6 +161,8 @@ class SimulatedBinaryCrossover(RecombinationStrategy):
         eta_c: float = 2.0,
         swap_prob: float = 0.5,
         bounds: Optional[Tuple[float, float]] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
     ) -> None:
         if not isinstance(eta_c, (int, float)) or isinstance(eta_c, bool) or eta_c < 0.0:
             raise ValueError(f"eta_c must be a non-negative float (>= 0.0), got {eta_c}.")
@@ -142,18 +171,28 @@ class SimulatedBinaryCrossover(RecombinationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.eta_c = float(eta_c)
         self.swap_prob = float(swap_prob)
         self.bounds = bounds
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, parent_a: Genome, parent_b: Genome) -> tuple[Genome, Genome]:
-        _validate_real_parents(parent_a, parent_b)
+    def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
+        _validate_composite_parent(parent_a)
+        _validate_composite_parent(parent_b)
+        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+
+        if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
+            raise ValueError("Genomes must have matching leaf structures for simulated binary crossover")
 
         child1_items = []
         child2_items = []
 
-        for x1, x2 in zip(parent_a, parent_b):
+        for x1, x2 in zip(leaves_a, leaves_b):
             if not isinstance(x1, (int, float)) or not isinstance(x2, (int, float)) or isinstance(x1, bool) or isinstance(x2, bool):
                 raise TypeError("SimulatedBinaryCrossover requires numeric genome elements.")
 
@@ -174,6 +213,7 @@ class SimulatedBinaryCrossover(RecombinationStrategy):
             child2_items.append(_clamp(c2, self.bounds))
 
         return (
-            clone_genome_structure(parent_a, child1_items),
-            clone_genome_structure(parent_b, child2_items),
+            unflatten_hierarchy(child1_items, treedef_a),
+            unflatten_hierarchy(child2_items, treedef_b),
         )
+

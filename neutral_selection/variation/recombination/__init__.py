@@ -25,6 +25,9 @@ from .elementwise_crossover import (
     ElementwiseCrossover,
 )
 
+# Alias HierarchicalCrossover to NPointCrossover (which natively supports multi-scale hierarchies)
+HierarchicalCrossover = NPointCrossover
+
 __all__ = [
     "RecombinationStrategy",
     "recombine",
@@ -42,4 +45,5 @@ __all__ = [
     "BlendCrossover",
     "SimulatedBinaryCrossover",
     "ElementwiseCrossover",
+    "HierarchicalCrossover",
 ]

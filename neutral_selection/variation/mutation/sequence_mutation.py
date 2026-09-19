@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import random
-from typing import Optional
+import dataclasses
+from typing import Optional, Any
 from neutral_selection.representation.genome import Genome, Segment
+from neutral_selection.representation.hierarchy import flatten_hierarchy, unflatten_hierarchy
 from .base import MutationStrategy
 from neutral_selection.registry import register_mutation
+
+
+def _validate_composite_genome(genome: Any) -> None:
+    if isinstance(genome, (str, bytes, bytearray, int, float, bool)) or not (
+        isinstance(genome, (Genome, list, tuple))
+        or dataclasses.is_dataclass(genome)
+        or hasattr(genome, "shape")
+        or hasattr(genome, "__hierarchical_flatten__")
+    ):
+        raise TypeError(f"Genome must be a Genome, sequence, dataclass or tensor, got {type(genome).__name__}")
 
 
 def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
@@ -19,24 +31,32 @@ class InversionMutation(MutationStrategy):
     """
     Inversion mutation strategy (2-opt reversal).
 
-    Selects a random subsequence within the genome and reverses the order of its elements.
+    Selects a random subsequence within the multi-scale genome strand and reverses the order of its elements.
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
-        if not hasattr(genome, "__len__") or not hasattr(genome, "__getitem__"):
-            raise TypeError("genome must support sequence indexing and len for inversion mutation.")
+    def __init__(
+        self,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-        n = len(genome)
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        n = len(leaves)
         if n <= 1:
             return genome
 
         idx1, idx2 = sorted(random.sample(range(n + 1), 2))
-        mutated_items = list(genome)
+        mutated_items = list(leaves)
         mutated_items[idx1:idx2] = reversed(mutated_items[idx1:idx2])
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["swap", "exchange"])
@@ -44,24 +64,32 @@ class SwapMutation(MutationStrategy):
     """
     Swap mutation strategy (Exchange mutation).
 
-    Selects two random elements within the genome sequence and swaps their positions.
+    Selects two random elements within the multi-scale genome sequence and swaps their positions.
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
-        if not hasattr(genome, "__len__") or not hasattr(genome, "__getitem__"):
-            raise TypeError("genome must support sequence indexing and len for swap mutation.")
+    def __init__(
+        self,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-        n = len(genome)
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        n = len(leaves)
         if n <= 1:
             return genome
 
         idx1, idx2 = random.sample(range(n), 2)
-        mutated_items = list(genome)
+        mutated_items = list(leaves)
         mutated_items[idx1], mutated_items[idx2] = mutated_items[idx2], mutated_items[idx1]
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["scramble", "shuffle"])
@@ -69,27 +97,35 @@ class ScrambleMutation(MutationStrategy):
     """
     Scramble mutation strategy.
 
-    Selects a random subsequence within the genome sequence and shuffles its elements.
+    Selects a random subsequence within the multi-scale genome sequence and shuffles its elements.
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
-        if not hasattr(genome, "__len__") or not hasattr(genome, "__getitem__"):
-            raise TypeError("genome must support sequence indexing and len for scramble mutation.")
+    def __init__(
+        self,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-        n = len(genome)
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        n = len(leaves)
         if n <= 1:
             return genome
 
         idx1, idx2 = sorted(random.sample(range(n + 1), 2))
-        subseq = list(genome[idx1:idx2])
+        subseq = list(leaves[idx1:idx2])
         random.shuffle(subseq)
 
-        mutated_items = list(genome)
+        mutated_items = list(leaves)
         mutated_items[idx1:idx2] = subseq
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["insertion", "displacement"])
@@ -98,24 +134,32 @@ class InsertionMutation(MutationStrategy):
     Insertion mutation strategy (Displacement mutation).
 
     Selects an element at a random index, removes it, and inserts it at another random index.
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
-        if not hasattr(genome, "__len__") or not hasattr(genome, "__getitem__"):
-            raise TypeError("genome must support sequence indexing and len for insertion mutation.")
+    def __init__(
+        self,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-        n = len(genome)
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        n = len(leaves)
         if n <= 1:
             return genome
 
         from_idx, to_idx = random.sample(range(n), 2)
-        mutated_items = list(genome)
+        mutated_items = list(leaves)
         item = mutated_items.pop(from_idx)
         mutated_items.insert(to_idx, item)
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["transposition", "block_swap"])
@@ -123,22 +167,29 @@ class TranspositionMutation(MutationStrategy):
     """
     Transposition mutation strategy (Block swap mutation).
 
-    Selects two non-overlapping contiguous slices/blocks within the genome and exchanges them.
+    Selects two non-overlapping contiguous slices/blocks within the multi-scale genome and exchanges them.
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __init__(self, block_size: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        block_size: Optional[int] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
         if block_size is not None:
             if type(block_size) is not int or block_size < 1:
                 raise ValueError(f"block_size must be an integer >= 1, got {block_size}.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
         self.block_size = block_size
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
-        if not hasattr(genome, "__len__") or not hasattr(genome, "__getitem__"):
-            raise TypeError("genome must support sequence indexing and len for transposition mutation.")
-
-        n = len(genome)
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        n = len(leaves)
         if n < 4:
             return genome
 
@@ -146,18 +197,18 @@ class TranspositionMutation(MutationStrategy):
         cuts = sorted(random.sample(range(n + 1), 4))
         p1, p2, p3, p4 = cuts
 
-        block1 = list(genome[p1:p2])
-        block2 = list(genome[p3:p4])
+        block1 = list(leaves[p1:p2])
+        block2 = list(leaves[p3:p4])
 
         mutated_items = (
-            list(genome[:p1])
+            list(leaves[:p1])
             + block2
-            + list(genome[p2:p3])
+            + list(leaves[p2:p3])
             + block1
-            + list(genome[p4:])
+            + list(leaves[p4:])
         )
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["duplication", "duplicate"])
@@ -166,21 +217,28 @@ class DuplicationMutation(MutationStrategy):
     Duplication mutation strategy.
 
     Selects a random element or subsequence and duplicates it at another location in the genome.
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __init__(self, max_length: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        max_length: Optional[int] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
         if max_length is not None:
             if type(max_length) is not int or max_length < 1:
                 raise ValueError(f"max_length must be an integer >= 1, got {max_length}.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
         self.max_length = max_length
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
-        if not hasattr(genome, "__len__") or not hasattr(genome, "__getitem__"):
-            raise TypeError("genome must support sequence indexing and len for duplication mutation.")
-
-        n = len(genome)
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        n = len(leaves)
         if n == 0:
             return genome
 
@@ -190,12 +248,12 @@ class DuplicationMutation(MutationStrategy):
         idx1, idx2 = sorted(random.sample(range(n + 1), 2))
         if idx1 == idx2:
             idx2 = min(n, idx1 + 1)
-        subseq = list(genome[idx1:idx2])
+        subseq = list(leaves[idx1:idx2])
 
         insert_pos = random.randint(0, n)
-        mutated_items = list(genome[:insert_pos]) + subseq + list(genome[insert_pos:])
+        mutated_items = list(leaves[:insert_pos]) + subseq + list(leaves[insert_pos:])
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["deletion", "delete"])
@@ -204,20 +262,27 @@ class DeletionMutation(MutationStrategy):
     Deletion mutation strategy.
 
     Deletes a random element or subsequence from the genome, preserving a minimum genome length.
+    Supports multi-tier hierarchical structures natively.
     """
 
-    def __init__(self, min_length: int = 1) -> None:
+    def __init__(
+        self,
+        min_length: int = 1,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
+    ) -> None:
         if type(min_length) is not int or min_length < 0:
             raise ValueError(f"min_length must be an integer >= 0, got {min_length}.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
         self.min_length = min_length
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
-        if not hasattr(genome, "__len__") or not hasattr(genome, "__getitem__"):
-            raise TypeError("genome must support sequence indexing and len for deletion mutation.")
-
-        n = len(genome)
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        n = len(leaves)
         if n <= self.min_length:
             return genome
 
@@ -226,5 +291,5 @@ class DeletionMutation(MutationStrategy):
         max_idx2 = min(n, idx1 + max_deletable)
         idx2 = random.randint(idx1 + 1, max_idx2)
 
-        mutated_items = list(genome[:idx1]) + list(genome[idx2:])
-        return _clone_genome_structure(genome, mutated_items)
+        mutated_items = list(leaves[:idx1]) + list(leaves[idx2:])
+        return unflatten_hierarchy(mutated_items, treedef)

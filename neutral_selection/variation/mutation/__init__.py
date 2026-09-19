@@ -28,6 +28,9 @@ from .mutators import (
     attribute_mutator,
 )
 
+# Alias HierarchicalMutation to InversionMutation (sequence mutations natively support multi-scale hierarchies)
+HierarchicalMutation = InversionMutation
+
 __all__ = [
     "MutationStrategy",
     "mutate",
@@ -45,6 +48,7 @@ __all__ = [
     "DuplicationMutation",
     "DeletionMutation",
     "UniformMutation",
+    "HierarchicalMutation",
     "gaussian_noise_mutator",
     "bit_flip_mutator",
     "attribute_mutator",

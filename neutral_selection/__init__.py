@@ -4,6 +4,12 @@ from .representation.genome import (
     CrossoverFn,
     MutationFn,
 )
+from .representation.hierarchy import (
+    TreeDef,
+    NodeDef,
+    flatten_hierarchy,
+    unflatten_hierarchy,
+)
 from .representation.lineage import Lineage
 from .representation.individual import Individual
 from .representation.population import Population
@@ -37,6 +43,7 @@ from .variation.recombination import (
     ArithmeticCrossover,
     BlendCrossover,
     SimulatedBinaryCrossover,
+    HierarchicalCrossover,
 )
 from .variation.mutation import (
     MutationStrategy,
@@ -49,6 +56,7 @@ from .variation.mutation import (
     TranspositionMutation,
     DuplicationMutation,
     DeletionMutation,
+    HierarchicalMutation,
     GaussianMutation,
     UniformRealMutation,
     PolynomialMutation,
@@ -102,6 +110,10 @@ __all__ = [
     "Lineage",
     "Individual",
     "Population",
+    "TreeDef",
+    "NodeDef",
+    "flatten_hierarchy",
+    "unflatten_hierarchy",
     # Variation - Parent Selection
     "SelectionStrategy",
     "select",
@@ -131,6 +143,7 @@ __all__ = [
     "ArithmeticCrossover",
     "BlendCrossover",
     "SimulatedBinaryCrossover",
+    "HierarchicalCrossover",
     # Variation - Mutation
     "MutationStrategy",
     "mutate",
@@ -142,6 +155,7 @@ __all__ = [
     "TranspositionMutation",
     "DuplicationMutation",
     "DeletionMutation",
+    "HierarchicalMutation",
     "GaussianMutation",
     "UniformRealMutation",
     "PolynomialMutation",

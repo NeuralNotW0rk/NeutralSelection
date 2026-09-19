@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Optional, Tuple
+import dataclasses
+from typing import Optional, Tuple, Any
 from neutral_selection.representation.genome import Genome, Segment
+from neutral_selection.representation.hierarchy import flatten_hierarchy, unflatten_hierarchy
 from .base import MutationStrategy
 from neutral_selection.registry import register_mutation
 
 
-def _clone_genome_structure(original: Genome, new_items: list) -> Genome:
-    """Creates a new genome instance matching the type and metadata of the original."""
-    if isinstance(original, Segment):
-        return original.__class__(original.key, new_items)
-    return original.__class__(new_items)
+def _validate_composite_genome(genome: Any) -> None:
+    if isinstance(genome, (str, bytes, bytearray, int, float, bool)) or not (
+        isinstance(genome, (Genome, list, tuple))
+        or dataclasses.is_dataclass(genome)
+        or hasattr(genome, "shape")
+        or hasattr(genome, "__hierarchical_flatten__")
+    ):
+        raise TypeError(f"Genome must be a Genome, sequence, dataclass or tensor, got {type(genome).__name__}")
 
 
 def _clamp(val: float, bounds: Optional[Tuple[float, float]]) -> float:
@@ -29,6 +34,7 @@ class GaussianMutation(MutationStrategy):
     Gaussian mutation strategy (Evolution Strategies).
 
     Adds zero-mean Gaussian noise N(0, sigma^2) to numeric gene values with probability `mutation_rate`.
+    Supports multi-tier hierarchical structures natively.
     """
 
     def __init__(
@@ -36,6 +42,8 @@ class GaussianMutation(MutationStrategy):
         sigma: float = 1.0,
         mutation_rate: float = 1.0,
         bounds: Optional[Tuple[float, float]] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
     ) -> None:
         if not isinstance(sigma, (int, float)) or isinstance(sigma, bool) or sigma <= 0.0:
             raise ValueError(f"sigma must be a positive float (> 0.0), got {sigma}.")
@@ -46,17 +54,21 @@ class GaussianMutation(MutationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.sigma = float(sigma)
         self.mutation_rate = float(mutation_rate)
         self.bounds = bounds
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
 
         mutated_items: list[float] = []
-        for val in genome:
+        for val in leaves:
             if not isinstance(val, (int, float)) or isinstance(val, bool):
                 raise TypeError(f"GaussianMutation requires numeric genome elements, got {type(val).__name__}.")
             if random.random() < self.mutation_rate:
@@ -65,7 +77,7 @@ class GaussianMutation(MutationStrategy):
                 new_val = float(val)
             mutated_items.append(new_val)
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["uniform_real", "real_uniform"])
@@ -74,6 +86,7 @@ class UniformRealMutation(MutationStrategy):
     Uniform real-valued mutation strategy.
 
     Perturbs numeric genes by adding uniform noise in [-delta, delta] with probability `mutation_rate`.
+    Supports multi-tier hierarchical structures natively.
     """
 
     def __init__(
@@ -81,6 +94,8 @@ class UniformRealMutation(MutationStrategy):
         delta: float = 1.0,
         mutation_rate: float = 1.0,
         bounds: Optional[Tuple[float, float]] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
     ) -> None:
         if not isinstance(delta, (int, float)) or isinstance(delta, bool) or delta <= 0.0:
             raise ValueError(f"delta must be a positive float (> 0.0), got {delta}.")
@@ -91,17 +106,21 @@ class UniformRealMutation(MutationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.delta = float(delta)
         self.mutation_rate = float(mutation_rate)
         self.bounds = bounds
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
 
         mutated_items: list[float] = []
-        for val in genome:
+        for val in leaves:
             if not isinstance(val, (int, float)) or isinstance(val, bool):
                 raise TypeError(f"UniformRealMutation requires numeric genome elements, got {type(val).__name__}.")
             if random.random() < self.mutation_rate:
@@ -111,7 +130,7 @@ class UniformRealMutation(MutationStrategy):
                 new_val = float(val)
             mutated_items.append(new_val)
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["polynomial", "pm"])
@@ -120,6 +139,7 @@ class PolynomialMutation(MutationStrategy):
     Polynomial mutation strategy (Deb & Agrawal, 1995; Deb, 2001 - NSGA-II).
 
     Applies bounded polynomial distribution perturbation. Standard in real-parameter genetic algorithms.
+    Supports multi-tier hierarchical structures natively.
     """
 
     def __init__(
@@ -127,6 +147,8 @@ class PolynomialMutation(MutationStrategy):
         bounds: Tuple[float, float],
         eta_m: float = 20.0,
         mutation_rate: Optional[float] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
     ) -> None:
         if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] >= bounds[1]:
             raise ValueError("bounds must be a tuple of (lower, upper) with lower < upper.")
@@ -140,21 +162,25 @@ class PolynomialMutation(MutationStrategy):
             self.mutation_rate: Optional[float] = float(mutation_rate)
         else:
             self.mutation_rate = None
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.bounds = (float(bounds[0]), float(bounds[1]))
         self.eta_m = float(eta_m)
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
 
-        n = len(genome)
-        p_m = (1.0 / n) if self.mutation_rate is None else self.mutation_rate
+        n = len(leaves)
+        p_m = (1.0 / n) if (self.mutation_rate is None and n > 0) else (self.mutation_rate or 1.0)
         low, high = self.bounds
         delta_max = high - low
 
         mutated_items: list[float] = []
-        for val in genome:
+        for val in leaves:
             if not isinstance(val, (int, float)) or isinstance(val, bool):
                 raise TypeError(f"PolynomialMutation requires numeric genome elements, got {type(val).__name__}.")
 
@@ -180,7 +206,7 @@ class PolynomialMutation(MutationStrategy):
 
             mutated_items.append(new_val)
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
 
 
 @register_mutation(["cauchy", "cauchy_mutation"])
@@ -189,6 +215,7 @@ class CauchyMutation(MutationStrategy):
     Cauchy mutation strategy (Fast Evolutionary Programming - Yao & Liu, 1996).
 
     Adds heavy-tailed Cauchy noise to numeric gene values with probability `mutation_rate`.
+    Supports multi-tier hierarchical structures natively.
     """
 
     def __init__(
@@ -196,6 +223,8 @@ class CauchyMutation(MutationStrategy):
         scale: float = 1.0,
         mutation_rate: float = 1.0,
         bounds: Optional[Tuple[float, float]] = None,
+        max_depth: Optional[int] = None,
+        atomic_types: tuple[type, ...] = (),
     ) -> None:
         if not isinstance(scale, (int, float)) or isinstance(scale, bool) or scale <= 0.0:
             raise ValueError(f"scale must be a positive float (> 0.0), got {scale}.")
@@ -206,17 +235,21 @@ class CauchyMutation(MutationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
+        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
+            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.scale = float(scale)
         self.mutation_rate = float(mutation_rate)
         self.bounds = bounds
+        self.max_depth = max_depth
+        self.atomic_types = atomic_types
 
-    def __call__(self, genome: Genome) -> Genome:
-        if not isinstance(genome, Genome):
-            raise TypeError("genome must be an instance of Genome.")
+    def __call__(self, genome: Any) -> Any:
+        _validate_composite_genome(genome)
+        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
 
         mutated_items: list[float] = []
-        for val in genome:
+        for val in leaves:
             if not isinstance(val, (int, float)) or isinstance(val, bool):
                 raise TypeError(f"CauchyMutation requires numeric genome elements, got {type(val).__name__}.")
             if random.random() < self.mutation_rate:
@@ -227,4 +260,4 @@ class CauchyMutation(MutationStrategy):
                 new_val = float(val)
             mutated_items.append(new_val)
 
-        return _clone_genome_structure(genome, mutated_items)
+        return unflatten_hierarchy(mutated_items, treedef)
