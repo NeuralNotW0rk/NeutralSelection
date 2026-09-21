@@ -174,9 +174,20 @@ class EvolutionPipeline:
         # Phase 1: Variation (Generate Offspring)
         offspring: list[Individual] = []
         while len(offspring) < needed_offspring:
-            selected = self.selection_strategy.select(parent_inds, k=2)
-            p1 = selected[0]
-            p2 = selected[1] if len(selected) > 1 else selected[0]
+            if len(parent_inds) >= 2:
+                p1 = self.selection_strategy.select_one(parent_inds) if hasattr(self.selection_strategy, "select_one") else self.selection_strategy.select(parent_inds, k=1)[0]
+                p2 = None
+                for _ in range(10):
+                    cand = self.selection_strategy.select_one(parent_inds) if hasattr(self.selection_strategy, "select_one") else self.selection_strategy.select(parent_inds, k=1)[0]
+                    if cand is not p1:
+                        p2 = cand
+                        break
+                if p2 is None:
+                    other_inds = [ind for ind in parent_inds if ind is not p1]
+                    p2 = random.choice(other_inds) if other_inds else p1
+            else:
+                p1 = parent_inds[0]
+                p2 = parent_inds[0]
 
             p1_id = id_map.get(id(p1), "unknown_parent_1")
             p2_id = id_map.get(id(p2), "unknown_parent_2")
