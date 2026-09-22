@@ -1,5 +1,7 @@
-import random
 import copy
+import importlib
+import random
+import sys
 from typing import Any, Callable
 
 
@@ -16,13 +18,19 @@ def gaussian_noise_mutator(std: float, mean: float = 0.0) -> Callable[[Any], Any
     def mutate_fn(val: Any) -> Any:
         # Check for torch Tensor
         if hasattr(val, "device") and hasattr(val, "dtype") and hasattr(val, "clone"):
-            import torch
-            return val + (torch.randn_like(val) * std + mean)
+            try:
+                torch = sys.modules.get("torch") or importlib.import_module("torch")
+                return val + (torch.randn_like(val) * std + mean)
+            except ModuleNotFoundError:
+                pass
 
         # Check for numpy array
         elif hasattr(val, "shape") and hasattr(val, "copy"):
-            import numpy as np
-            return val + np.random.normal(mean, std, size=val.shape)
+            try:
+                np = sys.modules.get("numpy") or importlib.import_module("numpy")
+                return val + np.random.normal(mean, std, size=val.shape)
+            except ModuleNotFoundError:
+                pass
 
         # Fallback to python floats/ints
         elif isinstance(val, (int, float)):

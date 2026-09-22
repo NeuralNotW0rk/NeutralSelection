@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
+import importlib
+import sys
 from typing import Any, Callable, Optional, Sequence, Union
 from neutral_selection.representation.genome import Genome, Segment
 
@@ -264,17 +266,17 @@ def unflatten_hierarchy(leaves: Sequence[Any], treedef: TreeDef) -> Any:
             # Try PyTorch Tensor if torch is present in sys.modules or class name matches
             if node_def.node_type.__name__ == "Tensor":
                 try:
-                    import torch
+                    torch = sys.modules.get("torch") or importlib.import_module("torch")
                     return torch.tensor(leaf_slice, dtype=dtype, device=device).reshape(shape)
-                except Exception:
+                except ModuleNotFoundError:
                     pass
 
             # Try NumPy ndarray
             if "ndarray" in node_def.node_type.__name__:
                 try:
-                    import numpy as np
+                    np = sys.modules.get("numpy") or importlib.import_module("numpy")
                     return np.array(leaf_slice, dtype=dtype).reshape(shape)
-                except Exception:
+                except ModuleNotFoundError:
                     pass
 
             # Fallback: reshape if class callable
