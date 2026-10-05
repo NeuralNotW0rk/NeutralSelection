@@ -8,7 +8,7 @@ from .base import SelectionStrategy, _extract_individuals, _validate_k
 from neutral_selection.registry import register_selection
 
 
-@register_selection("random")
+@register_selection(["random", "uniform"])
 class RandomSelection(SelectionStrategy):
     """
     Random / Uniform Selection strategy.
