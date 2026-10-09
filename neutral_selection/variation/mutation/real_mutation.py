@@ -3,9 +3,15 @@ from __future__ import annotations
 import math
 import random
 import dataclasses
+import sys
 from typing import Optional, Tuple, Any
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.representation.hierarchy import flatten_hierarchy, unflatten_hierarchy
+from neutral_selection.representation.hierarchy import (
+    flatten_strand,
+    float_strand,
+    is_tensor_strand,
+    unflatten_hierarchy,
+)
 from .base import MutationStrategy
 from neutral_selection.registry import register_mutation
 
@@ -20,12 +26,19 @@ def _validate_composite_genome(genome: Any) -> None:
         raise TypeError(f"Genome must be a Genome, sequence, dataclass or tensor, got {type(genome).__name__}")
 
 
-def _clamp(val: float, bounds: Optional[Tuple[float, float]]) -> float:
-    """Clamps a numeric value within optional (lower, upper) bounds."""
+def _clamp(val: Any, bounds: Optional[Tuple[float, float]]) -> Any:
+    """Clamps a numeric value (or every element of a tensor strand) within optional (lower, upper) bounds."""
     if bounds is None:
         return val
     low, high = bounds
+    if is_tensor_strand(val):
+        return val.clamp(low, high)
     return max(low, min(high, val))
+
+
+def _mutation_mask(x: Any, rate: float) -> Any:
+    """Draws an elementwise mask selecting each strand element with probability `rate`."""
+    return sys.modules["torch"].rand(x.shape, device=x.device) < rate
 
 
 @register_mutation(["gaussian", "normal"])
@@ -65,7 +78,13 @@ class GaussianMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+
+        if is_tensor_strand(leaves):
+            torch = sys.modules["torch"]
+            x = float_strand(leaves, "GaussianMutation")
+            noised = _clamp(x + torch.randn_like(x) * self.sigma, self.bounds)
+            return unflatten_hierarchy(torch.where(_mutation_mask(x, self.mutation_rate), noised, x), treedef)
 
         mutated_items: list[float] = []
         for val in leaves:
@@ -117,7 +136,14 @@ class UniformRealMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+
+        if is_tensor_strand(leaves):
+            torch = sys.modules["torch"]
+            x = float_strand(leaves, "UniformRealMutation")
+            noise = (torch.rand_like(x) * 2.0 - 1.0) * self.delta
+            noised = _clamp(x + noise, self.bounds)
+            return unflatten_hierarchy(torch.where(_mutation_mask(x, self.mutation_rate), noised, x), treedef)
 
         mutated_items: list[float] = []
         for val in leaves:
@@ -172,12 +198,26 @@ class PolynomialMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
 
         n = len(leaves)
         p_m = (1.0 / n) if (self.mutation_rate is None and n > 0) else (self.mutation_rate or 1.0)
         low, high = self.bounds
         delta_max = high - low
+
+        if is_tensor_strand(leaves):
+            torch = sys.modules["torch"]
+            x = float_strand(leaves, "PolynomialMutation")
+            u = torch.rand_like(x)
+            mut_pow = 1.0 / (self.eta_m + 1.0)
+            # Both branches are evaluated for every element; torch.where keeps the one u selects
+            xy_low = 1.0 - (x - low) / delta_max
+            inner_low = 2.0 * u + (1.0 - 2.0 * u) * xy_low.pow(self.eta_m + 1.0)
+            xy_high = 1.0 - (high - x) / delta_max
+            inner_high = 2.0 * (1.0 - u) + 2.0 * (u - 0.5) * xy_high.pow(self.eta_m + 1.0)
+            delta_q = torch.where(u <= 0.5, inner_low.pow(mut_pow) - 1.0, 1.0 - inner_high.pow(mut_pow))
+            mutated = torch.where(_mutation_mask(x, p_m), x + delta_q * delta_max, x)
+            return unflatten_hierarchy(_clamp(mutated, self.bounds), treedef)
 
         mutated_items: list[float] = []
         for val in leaves:
@@ -246,7 +286,14 @@ class CauchyMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+
+        if is_tensor_strand(leaves):
+            torch = sys.modules["torch"]
+            x = float_strand(leaves, "CauchyMutation")
+            cauchy_noise = self.scale * torch.tan(math.pi * (torch.rand_like(x) - 0.5))
+            noised = _clamp(x + cauchy_noise, self.bounds)
+            return unflatten_hierarchy(torch.where(_mutation_mask(x, self.mutation_rate), noised, x), treedef)
 
         mutated_items: list[float] = []
         for val in leaves:

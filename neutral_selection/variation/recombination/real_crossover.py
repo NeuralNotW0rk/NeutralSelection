@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import random
 import dataclasses
+import sys
 from typing import Optional, Tuple, Any
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.representation.hierarchy import flatten_hierarchy, unflatten_hierarchy
+from neutral_selection.representation.hierarchy import (
+    align_strands,
+    flatten_strand,
+    float_strand,
+    is_tensor_strand,
+    unflatten_hierarchy,
+)
 from .base import RecombinationStrategy
 from neutral_selection.registry import register_crossover
 
@@ -19,11 +26,13 @@ def _validate_composite_parent(parent: Any) -> None:
         raise TypeError(f"Parent must be a Genome, sequence, dataclass or tensor, got {type(parent).__name__}")
 
 
-def _clamp(val: float, bounds: Optional[Tuple[float, float]]) -> float:
-    """Clamps a numeric value within optional (lower, upper) bounds."""
+def _clamp(val: Any, bounds: Optional[Tuple[float, float]]) -> Any:
+    """Clamps a numeric value (or every element of a tensor strand) within optional (lower, upper) bounds."""
     if bounds is None:
         return val
     low, high = bounds
+    if is_tensor_strand(val):
+        return val.clamp(low, high)
     return max(low, min(high, val))
 
 
@@ -57,11 +66,21 @@ class ArithmeticCrossover(RecombinationStrategy):
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
             raise ValueError("Genomes must have matching leaf structures for arithmetic crossover")
+
+        if is_tensor_strand(leaves_a):
+            x1 = float_strand(leaves_a, "ArithmeticCrossover")
+            x2 = float_strand(leaves_b, "ArithmeticCrossover")
+            a = self.alpha
+            return (
+                unflatten_hierarchy(a * x1 + (1.0 - a) * x2, treedef_a),
+                unflatten_hierarchy((1.0 - a) * x1 + a * x2, treedef_b),
+            )
 
         child1_items = []
         child2_items = []
@@ -115,11 +134,25 @@ class BlendCrossover(RecombinationStrategy):
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
             raise ValueError("Genomes must have matching leaf structures for blend crossover")
+
+        if is_tensor_strand(leaves_a):
+            torch = sys.modules["torch"]
+            v1 = float_strand(leaves_a, "BlendCrossover")
+            v2 = float_strand(leaves_b, "BlendCrossover")
+            c_min = torch.minimum(v1, v2)
+            d = torch.maximum(v1, v2) - c_min
+            low = c_min - self.alpha * d
+            span = d * (1.0 + 2.0 * self.alpha)
+            return (
+                unflatten_hierarchy(_clamp(low + span * torch.rand_like(v1), self.bounds), treedef_a),
+                unflatten_hierarchy(_clamp(low + span * torch.rand_like(v1), self.bounds), treedef_b),
+            )
 
         child1_items = []
         child2_items = []
@@ -183,11 +216,27 @@ class SimulatedBinaryCrossover(RecombinationStrategy):
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
             raise ValueError("Genomes must have matching leaf structures for simulated binary crossover")
+
+        if is_tensor_strand(leaves_a):
+            torch = sys.modules["torch"]
+            v1 = float_strand(leaves_a, "SimulatedBinaryCrossover")
+            v2 = float_strand(leaves_b, "SimulatedBinaryCrossover")
+            crossed = (torch.rand_like(v1) <= self.swap_prob) & ((v1 - v2).abs() > 1e-14)
+            u = torch.rand_like(v1)
+            exponent = 1.0 / (self.eta_c + 1.0)
+            beta = torch.where(u <= 0.5, (2.0 * u).pow(exponent), (1.0 / (2.0 * (1.0 - u))).pow(exponent))
+            c1 = torch.where(crossed, 0.5 * ((1.0 + beta) * v1 + (1.0 - beta) * v2), v1)
+            c2 = torch.where(crossed, 0.5 * ((1.0 - beta) * v1 + (1.0 + beta) * v2), v2)
+            return (
+                unflatten_hierarchy(_clamp(c1, self.bounds), treedef_a),
+                unflatten_hierarchy(_clamp(c2, self.bounds), treedef_b),
+            )
 
         child1_items = []
         child2_items = []

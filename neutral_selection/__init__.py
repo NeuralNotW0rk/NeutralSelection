@@ -8,6 +8,7 @@ from .representation.hierarchy import (
     TreeDef,
     NodeDef,
     flatten_hierarchy,
+    flatten_strand,
     unflatten_hierarchy,
 )
 from .representation.lineage import Lineage
@@ -113,6 +114,7 @@ __all__ = [
     "TreeDef",
     "NodeDef",
     "flatten_hierarchy",
+    "flatten_strand",
     "unflatten_hierarchy",
     # Variation - Parent Selection
     "SelectionStrategy",

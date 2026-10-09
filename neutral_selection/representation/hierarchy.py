@@ -33,6 +33,26 @@ def _is_duck_tensor(obj: Any) -> bool:
     )
 
 
+def _torch_module() -> Any:
+    """Returns the torch module if it has been imported, without importing it."""
+    return sys.modules.get("torch")
+
+
+def is_tensor_strand(leaves: Any) -> bool:
+    """Checks if a leaf sequence is a 1D torch tensor strand (from flatten_strand) rather than a list."""
+    torch = _torch_module()
+    return torch is not None and isinstance(leaves, torch.Tensor)
+
+
+class _TensorRun:
+    """Placeholder for a whole torch tensor's flattened elements, used while building a strand."""
+
+    __slots__ = ("flat",)
+
+    def __init__(self, flat: Any) -> None:
+        self.flat = flat
+
+
 def flatten_hierarchy(
     obj: Any,
     max_depth: Optional[int] = None,
@@ -51,6 +71,90 @@ def flatten_hierarchy(
 
     Returns:
         A tuple of (leaf_items, treedef).
+    """
+    return _flatten(obj, max_depth, atomic_types, current_depth, tensor_runs=False)
+
+
+def flatten_strand(
+    obj: Any,
+    max_depth: Optional[int] = None,
+    atomic_types: tuple[type, ...] = (),
+) -> tuple[Any, TreeDef]:
+    """
+    Flattens like flatten_hierarchy, but when every leaf comes from torch tensors sharing one dtype and
+    device, returns the leaves as a single contiguous 1D tensor (a strand) instead of a list of Python
+    scalars. Otherwise returns the same leaf list as flatten_hierarchy. unflatten_hierarchy accepts both.
+
+    Parameters:
+        obj: The root hierarchical object to flatten.
+        max_depth: Maximum recursion depth (None for full recursion to leaves, 0 for root leaf).
+        atomic_types: Types explicitly treated as atomic/indivisible leaves.
+
+    Returns:
+        A tuple of (strand_or_leaf_items, treedef).
+    """
+    items, treedef = _flatten(obj, max_depth, atomic_types, 0, tensor_runs=True)
+    runs = [item.flat for item in items if isinstance(item, _TensorRun)]
+    if runs and len(runs) == len(items):
+        first = runs[0]
+        if all(r.dtype == first.dtype and r.device == first.device for r in runs):
+            torch = _torch_module()
+            return (torch.cat(runs) if len(runs) > 1 else first.clone()), treedef
+
+    leaves: list[Any] = []
+    for item in items:
+        if isinstance(item, _TensorRun):
+            leaves.extend(item.flat.cpu().tolist())
+        else:
+            leaves.append(item)
+    return leaves, treedef
+
+
+def float_strand(strand: Any, op_name: str) -> Any:
+    """
+    Returns a tensor strand converted for value arithmetic: floating dtypes are promoted to at least
+    float32, integer dtypes to float64. unflatten_hierarchy casts results back to each tensor's dtype.
+    """
+    torch = _torch_module()
+    if strand.dtype == torch.bool or strand.is_complex():
+        raise TypeError(f"{op_name} requires numeric genome elements, got {strand.dtype} tensors.")
+    if strand.is_floating_point():
+        return strand.to(torch.promote_types(strand.dtype, torch.float32))
+    return strand.to(torch.float64)
+
+
+def align_strands(leaves_a: Any, leaves_b: Any) -> tuple[Any, Any]:
+    """
+    Returns two leaf sequences in a common form: both tensor strands when they share dtype and device,
+    otherwise both lists.
+    """
+    if is_tensor_strand(leaves_a) and is_tensor_strand(leaves_b):
+        if leaves_a.dtype == leaves_b.dtype and leaves_a.device == leaves_b.device:
+            return leaves_a, leaves_b
+    as_list = lambda leaves: leaves.cpu().tolist() if is_tensor_strand(leaves) else leaves
+    return as_list(leaves_a), as_list(leaves_b)
+
+
+def concat_strands(parts: Sequence[Any]) -> Any:
+    """Concatenates slices of one leaf sequence, keeping tensor strands as tensors."""
+    if parts and is_tensor_strand(parts[0]):
+        return _torch_module().cat(list(parts))
+    items: list[Any] = []
+    for part in parts:
+        items.extend(part)
+    return items
+
+
+def _flatten(
+    obj: Any,
+    max_depth: Optional[int],
+    atomic_types: tuple[type, ...],
+    current_depth: int,
+    tensor_runs: bool,
+) -> tuple[list[Any], TreeDef]:
+    """
+    Implements flatten_hierarchy. With tensor_runs, each expanded torch tensor contributes a single
+    _TensorRun item holding its flattened elements, while its TreeDef node still counts every element.
     """
     if max_depth is not None and max_depth < 0:
         raise ValueError("max_depth must be non-negative or None")
@@ -96,11 +200,12 @@ def flatten_hierarchy(
                 or isinstance(val, (Genome, list, tuple))
                 or (dataclasses.is_dataclass(val) and not isinstance(val, type))
             ):
-                child_leaves, child_tree = flatten_hierarchy(
+                child_leaves, child_tree = _flatten(
                     val,
                     max_depth=max_depth,
                     atomic_types=atomic_types,
                     current_depth=current_depth + 1,
+                    tensor_runs=tensor_runs,
                 )
                 all_leaves.extend(child_leaves)
                 children_defs.append(child_tree.root_def)
@@ -109,6 +214,8 @@ def flatten_hierarchy(
                 field_metadata[field.name] = val
                 field_is_child[field.name] = False
 
+        # Counted from children, since a tensor run stands in for many leaves
+        num_leaves = sum(child.num_leaves for child in children_defs)
         node_def = NodeDef(
             node_type=type(obj),
             metadata={
@@ -116,20 +223,26 @@ def flatten_hierarchy(
                 "field_metadata": field_metadata,
                 "field_is_child": field_is_child,
             },
-            num_leaves=len(all_leaves),
+            num_leaves=num_leaves,
             children_defs=tuple(children_defs),
         )
-        return all_leaves, TreeDef(root_def=node_def, total_leaves=len(all_leaves))
+        return all_leaves, TreeDef(root_def=node_def, total_leaves=num_leaves)
 
     # 3. Check duck-typed Tensor / ndarray
     if _is_duck_tensor(obj):
-        # Convert tensor to flat 1D list of elements
-        if hasattr(obj, "detach"):
-            flat_items = obj.detach().cpu().reshape(-1).tolist()
-        elif hasattr(obj, "tolist"):
-            flat_items = obj.reshape(-1).tolist()
+        # Convert tensor to flat 1D list of elements (or a single run of them when building a strand)
+        if tensor_runs and is_tensor_strand(obj):
+            flat = obj.reshape(-1)
+            flat_items = [_TensorRun(flat.detach() if flat.requires_grad else flat)]
+            num_leaves = obj.numel()
         else:
-            flat_items = list(obj)
+            if hasattr(obj, "detach"):
+                flat_items = obj.detach().cpu().reshape(-1).tolist()
+            elif hasattr(obj, "tolist"):
+                flat_items = obj.reshape(-1).tolist()
+            else:
+                flat_items = list(obj)
+            num_leaves = len(flat_items)
 
         node_def = NodeDef(
             node_type=type(obj),
@@ -139,25 +252,27 @@ def flatten_hierarchy(
                 "dtype": getattr(obj, "dtype", None),
                 "device": getattr(obj, "device", None),
             },
-            num_leaves=len(flat_items),
+            num_leaves=num_leaves,
             children_defs=(),
         )
-        return flat_items, TreeDef(root_def=node_def, total_leaves=len(flat_items))
+        return flat_items, TreeDef(root_def=node_def, total_leaves=num_leaves)
 
     # 4. Check Genome / Segment
     if isinstance(obj, Genome):
         children_defs = []
         all_leaves = []
         for child in obj:
-            child_leaves, child_tree = flatten_hierarchy(
+            child_leaves, child_tree = _flatten(
                 child,
                 max_depth=max_depth,
                 atomic_types=atomic_types,
                 current_depth=current_depth + 1,
+                tensor_runs=tensor_runs,
             )
             all_leaves.extend(child_leaves)
             children_defs.append(child_tree.root_def)
 
+        num_leaves = sum(child.num_leaves for child in children_defs)
         meta: dict[str, Any] = {"is_genome": True}
         if isinstance(obj, Segment):
             meta["is_segment"] = True
@@ -166,32 +281,34 @@ def flatten_hierarchy(
         node_def = NodeDef(
             node_type=type(obj),
             metadata=meta,
-            num_leaves=len(all_leaves),
+            num_leaves=num_leaves,
             children_defs=tuple(children_defs),
         )
-        return all_leaves, TreeDef(root_def=node_def, total_leaves=len(all_leaves))
+        return all_leaves, TreeDef(root_def=node_def, total_leaves=num_leaves)
 
     # 5. Check standard sequence (list, tuple)
     if isinstance(obj, (list, tuple)):
         children_defs = []
         all_leaves = []
         for child in obj:
-            child_leaves, child_tree = flatten_hierarchy(
+            child_leaves, child_tree = _flatten(
                 child,
                 max_depth=max_depth,
                 atomic_types=atomic_types,
                 current_depth=current_depth + 1,
+                tensor_runs=tensor_runs,
             )
             all_leaves.extend(child_leaves)
             children_defs.append(child_tree.root_def)
 
+        num_leaves = sum(child.num_leaves for child in children_defs)
         node_def = NodeDef(
             node_type=type(obj),
             metadata={"is_sequence": True},
-            num_leaves=len(all_leaves),
+            num_leaves=num_leaves,
             children_defs=tuple(children_defs),
         )
-        return all_leaves, TreeDef(root_def=node_def, total_leaves=len(all_leaves))
+        return all_leaves, TreeDef(root_def=node_def, total_leaves=num_leaves)
 
     # 6. Fallback: atomic leaf
     node_def = NodeDef(
@@ -209,7 +326,8 @@ def unflatten_hierarchy(leaves: Sequence[Any], treedef: TreeDef) -> Any:
     and the structural TreeDef schema.
 
     Parameters:
-        leaves: Sequence of leaf elements matching the total leaf count of treedef.
+        leaves: Sequence of leaf elements (or a 1D tensor strand from flatten_strand) matching the
+            total leaf count of treedef.
         treedef: Structural TreeDef schema.
 
     Returns:
@@ -262,6 +380,10 @@ def unflatten_hierarchy(leaves: Sequence[Any], treedef: TreeDef) -> Any:
             shape = meta["shape"]
             dtype = meta["dtype"]
             device = meta["device"]
+
+            # Slice of a tensor strand: copy so tensors in the result never share storage with each other
+            if is_tensor_strand(leaf_slice):
+                return leaf_slice.reshape(shape).to(dtype=dtype, device=device, copy=True)
 
             # Try PyTorch Tensor if torch is present in sys.modules or class name matches
             if node_def.node_type.__name__ == "Tensor":

@@ -2,9 +2,18 @@ from __future__ import annotations
 
 import random
 import dataclasses
+import sys
 from typing import Optional, Sequence, Tuple, Union, Any
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.representation.hierarchy import flatten_hierarchy, unflatten_hierarchy
+from neutral_selection.representation.hierarchy import (
+    align_strands,
+    concat_strands,
+    flatten_hierarchy,
+    flatten_strand,
+    is_tensor_strand,
+    unflatten_hierarchy,
+    TreeDef,
+)
 from .base import RecombinationStrategy
 from neutral_selection.registry import register_crossover
 
@@ -39,9 +48,30 @@ def n_point_crossover(
     """
     _validate_composite_parent(parent_a)
     _validate_composite_parent(parent_b)
-    leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=max_depth, atomic_types=atomic_types)
-    leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=max_depth, atomic_types=atomic_types)
+    return _splice_at_cuts(*_flatten_parents(parent_a, parent_b, max_depth, atomic_types), cut_points)
 
+
+def _flatten_parents(
+    parent_a: Any,
+    parent_b: Any,
+    max_depth: Optional[int],
+    atomic_types: tuple[type, ...],
+) -> tuple[Any, TreeDef, Any, TreeDef]:
+    """Flattens both parents into leaf sequences of a common form (tensor strands or lists)."""
+    leaves_a, treedef_a = flatten_strand(parent_a, max_depth=max_depth, atomic_types=atomic_types)
+    leaves_b, treedef_b = flatten_strand(parent_b, max_depth=max_depth, atomic_types=atomic_types)
+    leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
+    return leaves_a, treedef_a, leaves_b, treedef_b
+
+
+def _splice_at_cuts(
+    leaves_a: Any,
+    treedef_a: TreeDef,
+    leaves_b: Any,
+    treedef_b: TreeDef,
+    cut_points: Sequence[int],
+) -> tuple[Any, Any]:
+    """Swaps flattened parent segments at the given cut points and rebuilds both children."""
     if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
         raise ValueError(
             f"Genomes must have matching leaf structures for crossover: "
@@ -52,32 +82,26 @@ def n_point_crossover(
 
     sorted_cuts = sorted(list(set(cut_points)))
 
-    child1_items = []
-    child2_items = []
+    child1_parts = []
+    child2_parts = []
 
     last_cut = 0
     use_a = True
 
-    for cut in sorted_cuts:
+    # The trailing None takes each parent's tail after the final cut
+    for cut in sorted_cuts + [None]:
         if use_a:
-            child1_items.extend(leaves_a[last_cut:cut])
-            child2_items.extend(leaves_b[last_cut:cut])
+            child1_parts.append(leaves_a[last_cut:cut])
+            child2_parts.append(leaves_b[last_cut:cut])
         else:
-            child1_items.extend(leaves_b[last_cut:cut])
-            child2_items.extend(leaves_a[last_cut:cut])
+            child1_parts.append(leaves_b[last_cut:cut])
+            child2_parts.append(leaves_a[last_cut:cut])
         last_cut = cut
         use_a = not use_a
 
-    if use_a:
-        child1_items.extend(leaves_a[last_cut:])
-        child2_items.extend(leaves_b[last_cut:])
-    else:
-        child1_items.extend(leaves_b[last_cut:])
-        child2_items.extend(leaves_a[last_cut:])
-
     return (
-        unflatten_hierarchy(child1_items, treedef_a),
-        unflatten_hierarchy(child2_items, treedef_b),
+        unflatten_hierarchy(concat_strands(child1_parts), treedef_a),
+        unflatten_hierarchy(concat_strands(child2_parts), treedef_b),
     )
 
 
@@ -108,15 +132,13 @@ class OnePointCrossover(RecombinationStrategy):
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, _ = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        n = len(leaves_a)
+        flat = _flatten_parents(parent_a, parent_b, self.max_depth, self.atomic_types)
+        n = len(flat[0])
         if n <= 1:
             return parent_a, parent_b
 
         cut = self.cut_point if self.cut_point is not None else random.randint(1, n - 1)
-        return n_point_crossover(
-            parent_a, parent_b, [cut], max_depth=self.max_depth, atomic_types=self.atomic_types
-        )
+        return _splice_at_cuts(*flat, [cut])
 
 
 @register_crossover("two_point")
@@ -150,8 +172,8 @@ class TwoPointCrossover(RecombinationStrategy):
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, _ = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        n = len(leaves_a)
+        flat = _flatten_parents(parent_a, parent_b, self.max_depth, self.atomic_types)
+        n = len(flat[0])
         if n <= 2:
             return parent_a, parent_b
 
@@ -160,9 +182,7 @@ class TwoPointCrossover(RecombinationStrategy):
         else:
             cuts = sorted(random.sample(range(1, n), 2))
 
-        return n_point_crossover(
-            parent_a, parent_b, cuts, max_depth=self.max_depth, atomic_types=self.atomic_types
-        )
+        return _splice_at_cuts(*flat, cuts)
 
 
 @register_crossover("fixed_n_point")
@@ -214,17 +234,15 @@ class RandomNPointCrossover(RecombinationStrategy):
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, _ = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        n = len(leaves_a)
+        flat = _flatten_parents(parent_a, parent_b, self.max_depth, self.atomic_types)
+        n = len(flat[0])
         if n <= 1:
             return parent_a, parent_b
 
         num_cuts = min(self.num_cut_points, n - 1)
         cut_points = sorted(random.sample(range(1, n), num_cuts))
 
-        return n_point_crossover(
-            parent_a, parent_b, cut_points, max_depth=self.max_depth, atomic_types=self.atomic_types
-        )
+        return _splice_at_cuts(*flat, cut_points)
 
 
 @register_crossover("uniform")
@@ -255,11 +273,21 @@ class UniformCrossover(RecombinationStrategy):
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
             raise ValueError("Genomes must have matching leaf structures for uniform crossover")
+
+        if is_tensor_strand(leaves_a):
+            # Draws one swap decision per element from torch's RNG instead of Python's random
+            torch = sys.modules["torch"]
+            from_a = torch.rand(len(leaves_a), device=leaves_a.device) < self.swap_prob
+            return (
+                unflatten_hierarchy(torch.where(from_a, leaves_a, leaves_b), treedef_a),
+                unflatten_hierarchy(torch.where(from_a, leaves_b, leaves_a), treedef_b),
+            )
 
         child1_items = []
         child2_items = []

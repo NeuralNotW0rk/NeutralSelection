@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import random
 import dataclasses
+import sys
 from typing import Optional, Any
 from neutral_selection.representation.genome import Genome, Segment
-from neutral_selection.representation.hierarchy import flatten_hierarchy, unflatten_hierarchy
+from neutral_selection.representation.hierarchy import (
+    concat_strands,
+    flatten_strand,
+    is_tensor_strand,
+    unflatten_hierarchy,
+)
 from .base import MutationStrategy
 from neutral_selection.registry import register_mutation
 
@@ -47,14 +53,15 @@ class InversionMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
 
         idx1, idx2 = sorted(random.sample(range(n + 1), 2))
-        mutated_items = list(leaves)
-        mutated_items[idx1:idx2] = reversed(mutated_items[idx1:idx2])
+        middle = leaves[idx1:idx2]
+        middle = middle.flip(0) if is_tensor_strand(middle) else middle[::-1]
+        mutated_items = concat_strands([leaves[:idx1], middle, leaves[idx2:]])
 
         return unflatten_hierarchy(mutated_items, treedef)
 
@@ -80,14 +87,19 @@ class SwapMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
 
-        idx1, idx2 = random.sample(range(n), 2)
-        mutated_items = list(leaves)
-        mutated_items[idx1], mutated_items[idx2] = mutated_items[idx2], mutated_items[idx1]
+        idx1, idx2 = sorted(random.sample(range(n), 2))
+        mutated_items = concat_strands([
+            leaves[:idx1],
+            leaves[idx2:idx2 + 1],
+            leaves[idx1 + 1:idx2],
+            leaves[idx1:idx1 + 1],
+            leaves[idx2 + 1:],
+        ])
 
         return unflatten_hierarchy(mutated_items, treedef)
 
@@ -113,17 +125,22 @@ class ScrambleMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
 
         idx1, idx2 = sorted(random.sample(range(n + 1), 2))
-        subseq = list(leaves[idx1:idx2])
-        random.shuffle(subseq)
+        # Shuffling positions draws the same permutation as shuffling the values themselves
+        order = list(range(idx2 - idx1))
+        random.shuffle(order)
+        middle = leaves[idx1:idx2]
+        if is_tensor_strand(middle):
+            subseq = middle[sys.modules["torch"].tensor(order, dtype=sys.modules["torch"].long, device=middle.device)]
+        else:
+            subseq = [middle[k] for k in order]
 
-        mutated_items = list(leaves)
-        mutated_items[idx1:idx2] = subseq
+        mutated_items = concat_strands([leaves[:idx1], subseq, leaves[idx2:]])
 
         return unflatten_hierarchy(mutated_items, treedef)
 
@@ -149,15 +166,15 @@ class InsertionMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
 
         from_idx, to_idx = random.sample(range(n), 2)
-        mutated_items = list(leaves)
-        item = mutated_items.pop(from_idx)
-        mutated_items.insert(to_idx, item)
+        item = leaves[from_idx:from_idx + 1]
+        remaining = concat_strands([leaves[:from_idx], leaves[from_idx + 1:]])
+        mutated_items = concat_strands([remaining[:to_idx], item, remaining[to_idx:]])
 
         return unflatten_hierarchy(mutated_items, treedef)
 
@@ -188,7 +205,7 @@ class TranspositionMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
         n = len(leaves)
         if n < 4:
             return genome
@@ -197,16 +214,13 @@ class TranspositionMutation(MutationStrategy):
         cuts = sorted(random.sample(range(n + 1), 4))
         p1, p2, p3, p4 = cuts
 
-        block1 = list(leaves[p1:p2])
-        block2 = list(leaves[p3:p4])
-
-        mutated_items = (
-            list(leaves[:p1])
-            + block2
-            + list(leaves[p2:p3])
-            + block1
-            + list(leaves[p4:])
-        )
+        mutated_items = concat_strands([
+            leaves[:p1],
+            leaves[p3:p4],
+            leaves[p2:p3],
+            leaves[p1:p2],
+            leaves[p4:],
+        ])
 
         return unflatten_hierarchy(mutated_items, treedef)
 
@@ -237,7 +251,7 @@ class DuplicationMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
         n = len(leaves)
         if n == 0:
             return genome
@@ -248,10 +262,10 @@ class DuplicationMutation(MutationStrategy):
         idx1, idx2 = sorted(random.sample(range(n + 1), 2))
         if idx1 == idx2:
             idx2 = min(n, idx1 + 1)
-        subseq = list(leaves[idx1:idx2])
+        subseq = leaves[idx1:idx2]
 
         insert_pos = random.randint(0, n)
-        mutated_items = list(leaves[:insert_pos]) + subseq + list(leaves[insert_pos:])
+        mutated_items = concat_strands([leaves[:insert_pos], subseq, leaves[insert_pos:]])
 
         return unflatten_hierarchy(mutated_items, treedef)
 
@@ -281,7 +295,7 @@ class DeletionMutation(MutationStrategy):
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_hierarchy(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= self.min_length:
             return genome
@@ -291,5 +305,5 @@ class DeletionMutation(MutationStrategy):
         max_idx2 = min(n, idx1 + max_deletable)
         idx2 = random.randint(idx1 + 1, max_idx2)
 
-        mutated_items = list(leaves[:idx1]) + list(leaves[idx2:])
+        mutated_items = concat_strands([leaves[:idx1], leaves[idx2:]])
         return unflatten_hierarchy(mutated_items, treedef)
