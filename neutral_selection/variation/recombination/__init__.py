@@ -21,6 +21,9 @@ from .real_crossover import (
     BlendCrossover,
     SimulatedBinaryCrossover,
 )
+from .function_crossover import (
+    FunctionCrossover,
+)
 from .elementwise_crossover import (
     ElementwiseCrossover,
 )
@@ -44,6 +47,7 @@ __all__ = [
     "ArithmeticCrossover",
     "BlendCrossover",
     "SimulatedBinaryCrossover",
+    "FunctionCrossover",
     "ElementwiseCrossover",
     "HierarchicalCrossover",
 ]

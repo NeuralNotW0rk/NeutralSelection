@@ -22,7 +22,7 @@ Existing Python evolutionary libraries often fall into two extremes:
 ## Core Value Proposition
 
 * 🧩 **Composable Functional Primitives:** Every operator is a standalone callable (`strategy(parent_a, parent_b)`) and functional helper (`recombine`, `mutate`, `select`, `replace`, `step`). Drop operators directly into any custom loop, interactive tool, or neural pipeline.
-* 🌳 **Heterogeneous & Segmented Genomes:** First-class support for multi-part chromosomes via `Segment` and `ElementwiseCrossover`. Different sections of a genome can have distinct representations, bounds, mutation rates, and crossover rules.
+* 🌳 **Heterogeneous & Segmented Genomes:** First-class support for multi-part chromosomes via `Segment`, with every operator's leaf scale set by `granularity` (`"atom"`, `"tensor"`, `"gene"` or a depth). Different sections of a genome can have distinct representations, bounds, mutation rates, and crossover rules.
 * ⚡ **PyTorch & Generative AI Friendly:** Native ergonomics for mutating and blending PyTorch tensors, NumPy arrays, latent vectors, and named model attributes.
 * 🛡️ **Modern Python & Strict Type Safety:** Built from the ground up for Python 3.10+ with comprehensive type annotations, dataclasses, explicit error boundaries, and zero metaprogramming magic.
 
@@ -38,14 +38,15 @@ Existing Python evolutionary libraries often fall into two extremes:
 * **Positional & Structural:** `OnePointCrossover`, `TwoPointCrossover`, `NPointCrossover`, `RandomNPointCrossover`, `UniformCrossover`, `ShuffleCrossover`
 * **Permutation & Order-Preserving:** `OrderCrossover` (OX1), `PartiallyMatchedCrossover` (PMX), `CycleCrossover` (CX)
 * **Real-Valued & Continuous:** `ArithmeticCrossover`, `BlendCrossover` (BLX-$\alpha$), `SimulatedBinaryCrossover` (SBX)
-* **Structure-Agnostic:** `ElementwiseCrossover` (recursive multi-segment blending)
+* **Callable:** `FunctionCrossover` (custom leaf-pair combination at any granularity); `ElementwiseCrossover` is its deprecated gene-scale alias
 * Functional helper: `recombine(parent_a, parent_b, strategy)`
 
 ### 3. Variation — Mutation (`neutral_selection.variation.mutation`)
 * **Sequence & Permutation:** `InversionMutation` (2-opt), `SwapMutation`, `ScrambleMutation`, `InsertionMutation`, `TranspositionMutation`, `DuplicationMutation`, `DeletionMutation`
 * **Real-Valued & Continuous:** `GaussianMutation`, `UniformRealMutation`, `PolynomialMutation` (NSGA-II), `CauchyMutation` (Fast EP)
 * **Binary & Discrete:** `BitFlipMutation`, `BoundaryMutation`
-* **Structure-Agnostic Mutators:** `UniformMutation`, `gaussian_noise_mutator`, `bit_flip_mutator`, `attribute_mutator`
+* **Callable:** `FunctionMutation` (custom per-leaf mutation at any granularity); `UniformMutation` is its deprecated gene-scale alias
+* **Mutator helpers:** `gaussian_noise_mutator`, `bit_flip_mutator`, `attribute_mutator`
 * Functional helper: `mutate(genome, strategy)`
 
 ### 4. Environmental Replacement (`neutral_selection.replacement`)
@@ -87,7 +88,7 @@ mutated_child = mutate(child_a, InversionMutation())
 from neutral_selection import (
     Genome,
     Segment,
-    ElementwiseCrossover,
+    FunctionCrossover,
     SimulatedBinaryCrossover,
     PartiallyMatchedCrossover,
     UniformCrossover,
@@ -112,8 +113,10 @@ segment_crossovers = {
     "discrete_flags": UniformCrossover(swap_prob=0.5),
 }
 
-blend_fn = lambda s1, s2: segment_crossovers[s1.key](s1, s2)
-child_1, child_2 = recombine(parent_1, parent_2, ElementwiseCrossover(blend_fn=blend_fn))
+crossover_fn = lambda s1, s2, _: segment_crossovers[s1.key](s1, s2)[0]
+
+# granularity=1 makes each top-level Segment one leaf, so each reaches its own operator whole
+child_1, child_2 = recombine(parent_1, parent_2, FunctionCrossover(crossover_fn, granularity=1))
 ```
 
 ### 3. Parent Selection & Replacement

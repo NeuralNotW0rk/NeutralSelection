@@ -21,6 +21,7 @@ from .sequence_mutation import (
     DuplicationMutation,
     DeletionMutation,
 )
+from .function_mutation import FunctionMutation
 from .uniform_mutation import UniformMutation
 from .mutators import (
     gaussian_noise_mutator,
@@ -47,6 +48,7 @@ __all__ = [
     "TranspositionMutation",
     "DuplicationMutation",
     "DeletionMutation",
+    "FunctionMutation",
     "UniformMutation",
     "HierarchicalMutation",
     "gaussian_noise_mutator",

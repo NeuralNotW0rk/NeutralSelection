@@ -6,6 +6,8 @@ import sys
 from typing import Optional, Any
 from neutral_selection.representation.genome import Genome, Segment
 from neutral_selection.representation.hierarchy import (
+    Granularity,
+    resolve_granularity,
     concat_strands,
     flatten_strand,
     is_tensor_strand,
@@ -45,15 +47,14 @@ class InversionMutation(MutationStrategy):
         self,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
@@ -79,15 +80,14 @@ class SwapMutation(MutationStrategy):
         self,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
@@ -117,15 +117,14 @@ class ScrambleMutation(MutationStrategy):
         self,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
@@ -158,15 +157,14 @@ class InsertionMutation(MutationStrategy):
         self,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= 1:
             return genome
@@ -193,19 +191,18 @@ class TranspositionMutation(MutationStrategy):
         block_size: Optional[int] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if block_size is not None:
             if type(block_size) is not int or block_size < 1:
                 raise ValueError(f"block_size must be an integer >= 1, got {block_size}.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.block_size = block_size
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
         n = len(leaves)
         if n < 4:
             return genome
@@ -239,19 +236,18 @@ class DuplicationMutation(MutationStrategy):
         max_length: Optional[int] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if max_length is not None:
             if type(max_length) is not int or max_length < 1:
                 raise ValueError(f"max_length must be an integer >= 1, got {max_length}.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.max_length = max_length
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
         n = len(leaves)
         if n == 0:
             return genome
@@ -284,18 +280,17 @@ class DeletionMutation(MutationStrategy):
         min_length: int = 1,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if type(min_length) is not int or min_length < 0:
             raise ValueError(f"min_length must be an integer >= 0, got {min_length}.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.min_length = min_length
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
         n = len(leaves)
         if n <= self.min_length:
             return genome

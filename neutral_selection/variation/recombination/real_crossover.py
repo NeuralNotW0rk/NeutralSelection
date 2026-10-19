@@ -6,6 +6,8 @@ import sys
 from typing import Optional, Tuple, Any
 from neutral_selection.representation.genome import Genome, Segment
 from neutral_selection.representation.hierarchy import (
+    Granularity,
+    resolve_granularity,
     align_strands,
     flatten_strand,
     float_strand,
@@ -52,22 +54,21 @@ class ArithmeticCrossover(RecombinationStrategy):
         alpha: float = 0.5,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(alpha, (int, float)) or isinstance(alpha, bool):
             raise TypeError(f"alpha must be a float, got {type(alpha).__name__}.")
         if not (0.0 <= alpha <= 1.0):
             raise ValueError(f"alpha must be in [0.0, 1.0], got {alpha}.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.alpha = float(alpha)
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, granularity=self.granularity, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, granularity=self.granularity, atomic_types=self.atomic_types)
         leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
@@ -117,25 +118,24 @@ class BlendCrossover(RecombinationStrategy):
         bounds: Optional[Tuple[float, float]] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(alpha, (int, float)) or isinstance(alpha, bool) or alpha < 0.0:
             raise ValueError(f"alpha must be a non-negative float (>= 0.0), got {alpha}.")
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.alpha = float(alpha)
         self.bounds = bounds
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, granularity=self.granularity, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, granularity=self.granularity, atomic_types=self.atomic_types)
         leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
@@ -196,6 +196,7 @@ class SimulatedBinaryCrossover(RecombinationStrategy):
         bounds: Optional[Tuple[float, float]] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(eta_c, (int, float)) or isinstance(eta_c, bool) or eta_c < 0.0:
             raise ValueError(f"eta_c must be a non-negative float (>= 0.0), got {eta_c}.")
@@ -204,20 +205,18 @@ class SimulatedBinaryCrossover(RecombinationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.eta_c = float(eta_c)
         self.swap_prob = float(swap_prob)
         self.bounds = bounds
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, granularity=self.granularity, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, granularity=self.granularity, atomic_types=self.atomic_types)
         leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:

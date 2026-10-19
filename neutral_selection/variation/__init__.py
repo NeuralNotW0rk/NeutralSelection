@@ -27,6 +27,7 @@ from .recombination import (
     ArithmeticCrossover,
     BlendCrossover,
     SimulatedBinaryCrossover,
+    FunctionCrossover,
     ElementwiseCrossover,
 )
 from .mutation import (
@@ -45,6 +46,7 @@ from .mutation import (
     TranspositionMutation,
     DuplicationMutation,
     DeletionMutation,
+    FunctionMutation,
     UniformMutation,
     gaussian_noise_mutator,
     bit_flip_mutator,
@@ -80,6 +82,7 @@ __all__ = [
     "ArithmeticCrossover",
     "BlendCrossover",
     "SimulatedBinaryCrossover",
+    "FunctionCrossover",
     "ElementwiseCrossover",
     # Mutation
     "MutationStrategy",
@@ -97,6 +100,7 @@ __all__ = [
     "TranspositionMutation",
     "DuplicationMutation",
     "DeletionMutation",
+    "FunctionMutation",
     "UniformMutation",
     "gaussian_noise_mutator",
     "bit_flip_mutator",

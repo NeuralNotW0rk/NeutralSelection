@@ -13,7 +13,7 @@ This document defines the strategic vision, architectural principles, feature pr
 * **Why not `DEAP`?** `DEAP` relies on 15-year-old untyped metaprogramming (`creator.create`), global mutable state, and lacks modern Python typing.
 * **Where `NeutralSelection` wins:**
   1. **Composable Functional Operators:** Every operator is a standalone callable (`strategy(a, b)`) and helper (`recombine`, `mutate`, `select`) usable inside any custom loop, interactive tool, or neural pipeline.
-  2. **Heterogeneous & Segmented Genomes:** Native `Segment` and `ElementwiseCrossover` support for multi-part chromosomes (e.g., continuous parameters + permutation orders + discrete flags).
+  2. **Heterogeneous & Segmented Genomes:** Native `Segment` support, with per-operator `granularity`, for multi-part chromosomes (e.g., continuous parameters + permutation orders + discrete flags).
   3. **Generative AI & PyTorch Alignment:** First-class ergonomics for PyTorch tensors, NumPy arrays, latent vectors, and model attributes.
   4. **Strict Type Safety:** Modern Python 3.10+, dataclasses, and zero global state.
 

@@ -7,6 +7,8 @@ import sys
 from typing import Optional, Tuple, Any
 from neutral_selection.representation.genome import Genome, Segment
 from neutral_selection.representation.hierarchy import (
+    Granularity,
+    resolve_granularity,
     flatten_strand,
     float_strand,
     is_tensor_strand,
@@ -57,6 +59,7 @@ class GaussianMutation(MutationStrategy):
         bounds: Optional[Tuple[float, float]] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(sigma, (int, float)) or isinstance(sigma, bool) or sigma <= 0.0:
             raise ValueError(f"sigma must be a positive float (> 0.0), got {sigma}.")
@@ -67,18 +70,16 @@ class GaussianMutation(MutationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.sigma = float(sigma)
         self.mutation_rate = float(mutation_rate)
         self.bounds = bounds
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
 
         if is_tensor_strand(leaves):
             torch = sys.modules["torch"]
@@ -115,6 +116,7 @@ class UniformRealMutation(MutationStrategy):
         bounds: Optional[Tuple[float, float]] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(delta, (int, float)) or isinstance(delta, bool) or delta <= 0.0:
             raise ValueError(f"delta must be a positive float (> 0.0), got {delta}.")
@@ -125,18 +127,16 @@ class UniformRealMutation(MutationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.delta = float(delta)
         self.mutation_rate = float(mutation_rate)
         self.bounds = bounds
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
 
         if is_tensor_strand(leaves):
             torch = sys.modules["torch"]
@@ -175,6 +175,7 @@ class PolynomialMutation(MutationStrategy):
         mutation_rate: Optional[float] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] >= bounds[1]:
             raise ValueError("bounds must be a tuple of (lower, upper) with lower < upper.")
@@ -188,17 +189,15 @@ class PolynomialMutation(MutationStrategy):
             self.mutation_rate: Optional[float] = float(mutation_rate)
         else:
             self.mutation_rate = None
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.bounds = (float(bounds[0]), float(bounds[1]))
         self.eta_m = float(eta_m)
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
 
         n = len(leaves)
         p_m = (1.0 / n) if (self.mutation_rate is None and n > 0) else (self.mutation_rate or 1.0)
@@ -265,6 +264,7 @@ class CauchyMutation(MutationStrategy):
         bounds: Optional[Tuple[float, float]] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(scale, (int, float)) or isinstance(scale, bool) or scale <= 0.0:
             raise ValueError(f"scale must be a positive float (> 0.0), got {scale}.")
@@ -275,18 +275,16 @@ class CauchyMutation(MutationStrategy):
         if bounds is not None:
             if not isinstance(bounds, tuple) or len(bounds) != 2 or bounds[0] > bounds[1]:
                 raise ValueError("bounds must be a tuple of (lower, upper) with lower <= upper.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
 
         self.scale = float(scale)
         self.mutation_rate = float(mutation_rate)
         self.bounds = bounds
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, genome: Any) -> Any:
         _validate_composite_genome(genome)
-        leaves, treedef = flatten_strand(genome, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves, treedef = flatten_strand(genome, granularity=self.granularity, atomic_types=self.atomic_types)
 
         if is_tensor_strand(leaves):
             torch = sys.modules["torch"]

@@ -6,6 +6,8 @@ import sys
 from typing import Optional, Sequence, Tuple, Union, Any
 from neutral_selection.representation.genome import Genome, Segment
 from neutral_selection.representation.hierarchy import (
+    Granularity,
+    resolve_granularity,
     align_strands,
     concat_strands,
     flatten_hierarchy,
@@ -41,6 +43,7 @@ def n_point_crossover(
     cut_points: list[int],
     max_depth: Optional[int] = None,
     atomic_types: tuple[type, ...] = (),
+    granularity: Granularity = None,
 ) -> tuple[Any, Any]:
     """
     Polymorphically slices and swaps parent genomes across a flattened multi-tier hierarchy at the specified cut points.
@@ -48,18 +51,19 @@ def n_point_crossover(
     """
     _validate_composite_parent(parent_a)
     _validate_composite_parent(parent_b)
-    return _splice_at_cuts(*_flatten_parents(parent_a, parent_b, max_depth, atomic_types), cut_points)
+    granularity = resolve_granularity(granularity, max_depth)
+    return _splice_at_cuts(*_flatten_parents(parent_a, parent_b, granularity, atomic_types), cut_points)
 
 
 def _flatten_parents(
     parent_a: Any,
     parent_b: Any,
-    max_depth: Optional[int],
+    granularity: Granularity,
     atomic_types: tuple[type, ...],
 ) -> tuple[Any, TreeDef, Any, TreeDef]:
     """Flattens both parents into leaf sequences of a common form (tensor strands or lists)."""
-    leaves_a, treedef_a = flatten_strand(parent_a, max_depth=max_depth, atomic_types=atomic_types)
-    leaves_b, treedef_b = flatten_strand(parent_b, max_depth=max_depth, atomic_types=atomic_types)
+    leaves_a, treedef_a = flatten_strand(parent_a, atomic_types=atomic_types, granularity=granularity)
+    leaves_b, treedef_b = flatten_strand(parent_b, atomic_types=atomic_types, granularity=granularity)
     leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
     return leaves_a, treedef_a, leaves_b, treedef_b
 
@@ -119,20 +123,19 @@ class OnePointCrossover(RecombinationStrategy):
         cut_point: Optional[int] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if cut_point is not None:
             if type(cut_point) is not int or cut_point < 0:
                 raise ValueError(f"cut_point must be a non-negative integer, got {cut_point}.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.cut_point = cut_point
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        flat = _flatten_parents(parent_a, parent_b, self.max_depth, self.atomic_types)
+        flat = _flatten_parents(parent_a, parent_b, self.granularity, self.atomic_types)
         n = len(flat[0])
         if n <= 1:
             return parent_a, parent_b
@@ -155,6 +158,7 @@ class TwoPointCrossover(RecombinationStrategy):
         cut_points: Optional[Tuple[int, int]] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if cut_points is not None:
             if (
@@ -163,16 +167,14 @@ class TwoPointCrossover(RecombinationStrategy):
                 or any(type(c) is not int or c < 0 for c in cut_points)
             ):
                 raise ValueError("cut_points must be a tuple of two non-negative integers.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.cut_points = cut_points
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        flat = _flatten_parents(parent_a, parent_b, self.max_depth, self.atomic_types)
+        flat = _flatten_parents(parent_a, parent_b, self.granularity, self.atomic_types)
         n = len(flat[0])
         if n <= 2:
             return parent_a, parent_b
@@ -194,22 +196,21 @@ class NPointCrossover(RecombinationStrategy):
         cut_points: list[int],
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(cut_points, list):
             raise TypeError("cut_points must be a list of integers")
         if any(not isinstance(c, int) or c < 0 for c in cut_points):
             raise ValueError("Cut points must be non-negative integers")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.cut_points = cut_points
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
         return n_point_crossover(
-            parent_a, parent_b, self.cut_points, max_depth=self.max_depth, atomic_types=self.atomic_types
+            parent_a, parent_b, self.cut_points, granularity=self.granularity, atomic_types=self.atomic_types
         )
 
 
@@ -222,19 +223,18 @@ class RandomNPointCrossover(RecombinationStrategy):
         num_cut_points: int = 1,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(num_cut_points, int) or num_cut_points < 1:
             raise ValueError("num_cut_points must be an integer >= 1")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.num_cut_points = num_cut_points
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        flat = _flatten_parents(parent_a, parent_b, self.max_depth, self.atomic_types)
+        flat = _flatten_parents(parent_a, parent_b, self.granularity, self.atomic_types)
         n = len(flat[0])
         if n <= 1:
             return parent_a, parent_b
@@ -259,22 +259,21 @@ class UniformCrossover(RecombinationStrategy):
         swap_prob: float = 0.5,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if not isinstance(swap_prob, (int, float)) or isinstance(swap_prob, bool):
             raise TypeError(f"swap_prob must be a float, got {type(swap_prob).__name__}.")
         if not (0.0 <= swap_prob <= 1.0):
             raise ValueError(f"swap_prob must be in [0.0, 1.0], got {swap_prob}.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.swap_prob = float(swap_prob)
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_strand(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_strand(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_strand(parent_a, granularity=self.granularity, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_strand(parent_b, granularity=self.granularity, atomic_types=self.atomic_types)
         leaves_a, leaves_b = align_strands(leaves_a, leaves_b)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
@@ -320,20 +319,19 @@ class ShuffleCrossover(RecombinationStrategy):
         crossover_strategy: Optional[RecombinationStrategy] = None,
         max_depth: Optional[int] = None,
         atomic_types: tuple[type, ...] = (),
+        granularity: Granularity = None,
     ) -> None:
         if crossover_strategy is not None and not isinstance(crossover_strategy, RecombinationStrategy):
             raise TypeError("crossover_strategy must be an instance of RecombinationStrategy.")
-        if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-            raise ValueError("max_depth must be a non-negative integer or None")
         self.crossover_strategy = crossover_strategy or OnePointCrossover()
-        self.max_depth = max_depth
+        self.granularity = resolve_granularity(granularity, max_depth)
         self.atomic_types = atomic_types
 
     def __call__(self, parent_a: Any, parent_b: Any) -> tuple[Any, Any]:
         _validate_composite_parent(parent_a)
         _validate_composite_parent(parent_b)
-        leaves_a, treedef_a = flatten_hierarchy(parent_a, max_depth=self.max_depth, atomic_types=self.atomic_types)
-        leaves_b, treedef_b = flatten_hierarchy(parent_b, max_depth=self.max_depth, atomic_types=self.atomic_types)
+        leaves_a, treedef_a = flatten_hierarchy(parent_a, granularity=self.granularity, atomic_types=self.atomic_types)
+        leaves_b, treedef_b = flatten_hierarchy(parent_b, granularity=self.granularity, atomic_types=self.atomic_types)
 
         if len(leaves_a) != len(leaves_b) or treedef_a.total_leaves != treedef_b.total_leaves:
             raise ValueError("Genomes must have matching leaf structures for shuffle crossover")

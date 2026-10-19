@@ -2,7 +2,16 @@ from .genome import Genome, Segment, CrossoverFn, MutationFn
 from .individual import Individual
 from .population import Population
 from .lineage import Lineage
-from .hierarchy import TreeDef, NodeDef, flatten_hierarchy, flatten_strand, unflatten_hierarchy
+from .hierarchy import (
+    TreeDef,
+    NodeDef,
+    Granularity,
+    GRANULARITIES,
+    resolve_granularity,
+    flatten_hierarchy,
+    flatten_strand,
+    unflatten_hierarchy,
+)
 
 __all__ = [
     "Genome",
@@ -14,6 +23,9 @@ __all__ = [
     "Lineage",
     "TreeDef",
     "NodeDef",
+    "Granularity",
+    "GRANULARITIES",
+    "resolve_granularity",
     "flatten_hierarchy",
     "flatten_strand",
     "unflatten_hierarchy",

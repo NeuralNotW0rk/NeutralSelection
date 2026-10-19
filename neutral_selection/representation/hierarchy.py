@@ -8,6 +8,32 @@ from typing import Any, Callable, Optional, Sequence, Union
 from neutral_selection.representation.genome import Genome, Segment
 
 
+# An operator's leaf scale: "atom" (fully flattened, the default), "tensor" (each tensor is one leaf),
+# "gene" (only Genome/Segment containers are expanded, so each gene is one leaf), or an int depth.
+Granularity = Union[str, int, None]
+GRANULARITIES = ("atom", "tensor", "gene")
+
+
+def resolve_granularity(granularity: Granularity = None, max_depth: Optional[int] = None) -> Union[str, int]:
+    """
+    Normalizes a granularity setting, accepting max_depth as the older spelling of an int granularity.
+    Returns one of GRANULARITIES or a non-negative int depth.
+    """
+    if max_depth is not None:
+        if granularity is not None and granularity != max_depth:
+            raise ValueError("Pass either granularity or max_depth, not both.")
+        granularity = max_depth
+    if granularity is None:
+        return "atom"
+    if isinstance(granularity, int) and not isinstance(granularity, bool):
+        if granularity < 0:
+            raise ValueError("max_depth must be a non-negative integer or None")
+        return granularity
+    if isinstance(granularity, str) and granularity.lower().strip() in GRANULARITIES:
+        return granularity.lower().strip()
+    raise ValueError(f"granularity must be one of {GRANULARITIES} or a non-negative int depth, got {granularity!r}.")
+
+
 @dataclass(frozen=True)
 class NodeDef:
     """Metadata schema representing a node in the hierarchical genome tree."""
@@ -58,6 +84,7 @@ def flatten_hierarchy(
     max_depth: Optional[int] = None,
     atomic_types: tuple[type, ...] = (),
     current_depth: int = 0,
+    granularity: Granularity = None,
 ) -> tuple[list[Any], TreeDef]:
     """
     Flattens a composite hierarchical structure (Genomes, Segments, Dataclasses, Tensors, Protocol objects)
@@ -68,17 +95,20 @@ def flatten_hierarchy(
         max_depth: Maximum recursion depth (None for full recursion to leaves, 0 for root leaf).
         atomic_types: Types explicitly treated as atomic/indivisible leaves.
         current_depth: Current recursion depth in the tree.
+        granularity: Leaf scale ("atom", "tensor", "gene" or an int depth); see resolve_granularity.
 
     Returns:
         A tuple of (leaf_items, treedef).
     """
-    return _flatten(obj, max_depth, atomic_types, current_depth, tensor_runs=False)
+    depth, mode = _split_granularity(granularity, max_depth)
+    return _flatten(obj, depth, atomic_types, current_depth, tensor_runs=False, mode=mode)
 
 
 def flatten_strand(
     obj: Any,
     max_depth: Optional[int] = None,
     atomic_types: tuple[type, ...] = (),
+    granularity: Granularity = None,
 ) -> tuple[Any, TreeDef]:
     """
     Flattens like flatten_hierarchy, but when every leaf comes from torch tensors sharing one dtype and
@@ -89,11 +119,13 @@ def flatten_strand(
         obj: The root hierarchical object to flatten.
         max_depth: Maximum recursion depth (None for full recursion to leaves, 0 for root leaf).
         atomic_types: Types explicitly treated as atomic/indivisible leaves.
+        granularity: Leaf scale ("atom", "tensor", "gene" or an int depth); see resolve_granularity.
 
     Returns:
         A tuple of (strand_or_leaf_items, treedef).
     """
-    items, treedef = _flatten(obj, max_depth, atomic_types, 0, tensor_runs=True)
+    depth, mode = _split_granularity(granularity, max_depth)
+    items, treedef = _flatten(obj, depth, atomic_types, 0, tensor_runs=True, mode=mode)
     runs = [item.flat for item in items if isinstance(item, _TensorRun)]
     if runs and len(runs) == len(items):
         first = runs[0]
@@ -108,6 +140,14 @@ def flatten_strand(
         else:
             leaves.append(item)
     return leaves, treedef
+
+
+def _split_granularity(granularity: Granularity, max_depth: Optional[int]) -> tuple[Optional[int], str]:
+    """Splits a granularity into the (max_depth, mode) pair that _flatten takes."""
+    resolved = resolve_granularity(granularity, max_depth)
+    if isinstance(resolved, int):
+        return resolved, "atom"
+    return None, resolved
 
 
 def float_strand(strand: Any, op_name: str) -> Any:
@@ -151,17 +191,26 @@ def _flatten(
     atomic_types: tuple[type, ...],
     current_depth: int,
     tensor_runs: bool,
+    mode: str = "atom",
 ) -> tuple[list[Any], TreeDef]:
     """
     Implements flatten_hierarchy. With tensor_runs, each expanded torch tensor contributes a single
     _TensorRun item holding its flattened elements, while its TreeDef node still counts every element.
+    mode is a named granularity ("atom", "tensor" or "gene"); depth limits arrive as max_depth.
     """
     if max_depth is not None and max_depth < 0:
         raise ValueError("max_depth must be non-negative or None")
 
-    # 1. Check if explicitly marked atomic or max depth reached
+    # 1. Check if explicitly marked atomic, max depth reached, or below the granularity's boundary
+    # (a gene-scale root that is a plain sequence is still expanded, so its items become the genes)
     if (atomic_types and isinstance(obj, atomic_types)) or (
         max_depth is not None and current_depth >= max_depth
+    ) or (
+        mode == "gene"
+        and not isinstance(obj, Genome)
+        and not (current_depth == 0 and isinstance(obj, (list, tuple)))
+    ) or (
+        mode == "tensor" and _is_duck_tensor(obj)
     ):
         node_def = NodeDef(
             node_type=type(obj),
@@ -206,6 +255,7 @@ def _flatten(
                     atomic_types=atomic_types,
                     current_depth=current_depth + 1,
                     tensor_runs=tensor_runs,
+                    mode=mode,
                 )
                 all_leaves.extend(child_leaves)
                 children_defs.append(child_tree.root_def)
@@ -268,6 +318,7 @@ def _flatten(
                 atomic_types=atomic_types,
                 current_depth=current_depth + 1,
                 tensor_runs=tensor_runs,
+                mode=mode,
             )
             all_leaves.extend(child_leaves)
             children_defs.append(child_tree.root_def)
@@ -297,6 +348,7 @@ def _flatten(
                 atomic_types=atomic_types,
                 current_depth=current_depth + 1,
                 tensor_runs=tensor_runs,
+                mode=mode,
             )
             all_leaves.extend(child_leaves)
             children_defs.append(child_tree.root_def)

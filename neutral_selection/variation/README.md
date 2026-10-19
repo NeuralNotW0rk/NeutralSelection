@@ -4,6 +4,23 @@ The `variation` package implements operators responsible for creating genetic di
 
 ---
 
+## Granularity
+
+Every operator that handles nested genomes takes a `granularity` argument that sets what counts as one leaf. Operators flatten the genome to a strand of leaves at that scale, operate on the strand, and rebuild the original structure.
+
+| `granularity` | One leaf is | Example on a genome of LoRA genes |
+| :--- | :--- | :--- |
+| `"atom"` (default) | A single scalar: descends into genes, dataclasses and tensors | One weight |
+| `"tensor"` | A whole tensor; everything above tensors is still expanded | One `lora_down` or `lora_up` matrix |
+| `"gene"` | Any item that is not itself a `Genome` or `Segment`, at whatever depth it sits | One `LoRAGene` |
+| `int` | Whatever sits at that depth below the root | `1`: each top-level item |
+
+`atomic_types` still applies on top of any granularity. `max_depth=k` is the older spelling of `granularity=k`.
+
+Positional and callable operators work at every granularity. Numeric operators (Gaussian, polynomial, arithmetic, SBX and similar) need numeric leaves, so they are normally used at `"atom"`.
+
+---
+
 ## 1. Parent Selection (`neutral_selection.variation.selection`)
 
 Parent selection operators choose individuals from a population for reproduction based on their relative fitness values.
@@ -31,14 +48,15 @@ Crossover strategies combine genetic material from two parent chromosomes.
 | `OnePointCrossover` | Positional | Single random or fixed split point. |
 | `TwoPointCrossover` | Positional | Swaps slice between two cut points. |
 | `NPointCrossover` / `RandomNPointCrossover` | Positional | Arbitrary $N$-point crossover. |
-| `UniformCrossover` | Positional | Gene-by-gene independent binomial swap ($p_{\text{swap}}$). |
+| `UniformCrossover` | Positional | Leaf-by-leaf independent binomial swap ($p_{\text{swap}}$). |
 | `OrderCrossover` (OX1) | Permutation | Order-preserving permutation crossover. |
 | `PartiallyMatchedCrossover` (PMX) | Permutation | Cycle-mapping permutation crossover (Goldberg & Lingle, 1985). |
 | `CycleCrossover` (CX) | Permutation | Preserves exact absolute positions from parents. |
 | `ArithmeticCrossover` | Real-Valued | Convex combination: $\mathbf{c}_1 = \alpha \mathbf{p}_1 + (1-\alpha)\mathbf{p}_2$. |
 | `BlendCrossover` (BLX-$\alpha$) | Real-Valued | Interval expansion: $[x_{\min} - \alpha I, x_{\max} + \alpha I]$ (Eshelman & Schaffer, 1993). |
 | `SimulatedBinaryCrossover` (SBX) | Real-Valued | Self-adaptive search power with distribution index $\eta_c$ (Deb & Agrawal, 1995). |
-| `ElementwiseCrossover` | Heterogeneous | Maps custom crossover strategies across named chromosome `Segment` elements. |
+| `FunctionCrossover` | Callable | Combines each aligned pair of leaves with a custom `crossover_fn(a, b, blend_factor)`; returns two children, or one with `num_children=1` (for symmetric callables). |
+| `ElementwiseCrossover` | Callable (deprecated) | `FunctionCrossover` at `granularity="gene"` with `num_children=1`. |
 
 ---
 
@@ -61,4 +79,5 @@ Mutation strategies introduce novel variations into individual genomes.
 | `TranspositionMutation` | Sequence | Swaps two contiguous sub-sequences. |
 | `DuplicationMutation` | Sequence | Duplicates a gene segment (variable-length genomes). |
 | `DeletionMutation` | Sequence | Deletes a gene segment (variable-length genomes). |
-| `UniformMutation` | Structure-Agnostic | Applies a custom callable mutator across genome elements. |
+| `FunctionMutation` | Callable | Applies a custom `mutation_fn` to each leaf with probability `mutation_rate`. |
+| `UniformMutation` | Callable (deprecated) | `FunctionMutation` at `granularity="gene"`. |

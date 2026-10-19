@@ -10,8 +10,8 @@ from neutral_selection.registry import (
     get_replacement_strategy,
 )
 from neutral_selection.variation.selection import SelectionStrategy, TournamentSelection
-from neutral_selection.variation.recombination import RecombinationStrategy
-from neutral_selection.variation.mutation import MutationStrategy
+from neutral_selection.variation.recombination import RecombinationStrategy, FunctionCrossover
+from neutral_selection.variation.mutation import MutationStrategy, FunctionMutation
 from neutral_selection.replacement import ReplacementStrategy
 from neutral_selection.pipeline import EvolutionPipeline
 
@@ -107,8 +107,8 @@ def build_crossover_strategy(config: dict[str, Any]) -> RecombinationStrategy:
     strategy_type = str(config.get("type", "random_n_point")).lower().strip()
     cls = get_crossover_strategy(strategy_type)
 
-    if cls.__name__ == "ElementwiseCrossover" and "crossover_fn" not in config and "blend_fn" not in config and "fn" not in config:
-        raise ValueError("ElementwiseCrossover requires 'crossover_fn' in config.")
+    if issubclass(cls, FunctionCrossover) and "crossover_fn" not in config and "blend_fn" not in config and "fn" not in config:
+        raise ValueError(f"{cls.__name__} requires 'crossover_fn' in config.")
 
     param_aliases = {
         "swap_prob": ["swap_prob", "prob"],
@@ -121,7 +121,7 @@ def build_crossover_strategy(config: dict[str, Any]) -> RecombinationStrategy:
     defaults: dict[str, Any] = {}
     if cls.__name__ == "SimulatedBinaryCrossover" and "bounds" not in config:
         defaults["bounds"] = (-1.0, 1.0)
-    elif cls.__name__ == "ElementwiseCrossover" and not any(k in config for k in ["blend_factor", "factor", "alpha", "weight"]):
+    elif issubclass(cls, FunctionCrossover) and not any(k in config for k in ["blend_factor", "factor", "alpha", "weight"]):
         defaults["blend_factor"] = 0.5
 
     return _instantiate_from_config(cls, config, param_aliases=param_aliases, defaults=defaults)
@@ -143,11 +143,12 @@ def build_mutation_strategy(config: dict[str, Any]) -> MutationStrategy:
     strategy_type = str(config.get("type", "gaussian")).lower().strip()
     cls = get_mutation_strategy(strategy_type)
 
-    if cls.__name__ == "UniformMutation" and "mutation_fn" not in config:
-        raise ValueError("UniformMutation requires 'mutation_fn' in config.")
+    if issubclass(cls, FunctionMutation) and "mutation_fn" not in config and "fn" not in config:
+        raise ValueError(f"{cls.__name__} requires 'mutation_fn' in config.")
 
     param_aliases = {
         "mutation_rate": ["mutation_rate", "rate", "flip_prob"],
+        "mutation_fn": ["mutation_fn", "fn"],
         "sigma": ["sigma", "noise"],
         "scale": ["scale", "gamma"],
     }
