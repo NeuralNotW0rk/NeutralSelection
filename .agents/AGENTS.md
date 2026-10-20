@@ -1,17 +1,17 @@
-# NeutralSelection — Agent Development Guide (`AGENTS.md`)
+# Neutral Selection — Agent Development Guide (`AGENTS.md`)
 
-This document defines the strategic vision, architectural principles, feature priorities, and coding standards for AI agents and developers working on the `NeutralSelection` codebase.
+This document defines the strategic vision, architectural principles, feature priorities, and coding standards for AI agents and developers working on the `neutral-selection` codebase.
 
 ---
 
 ## 1. Strategic Vision & Ecosystem Niche
 
-`NeutralSelection` is designed to be the **modern, strictly-typed, and composable evolutionary computation framework for Python**.
+Neutral Selection is designed to be the **modern, strictly-typed, and composable evolutionary computation framework for Python**.
 
 ### Ecosystem Comparison
 * **Why not `pymoo`?** `pymoo` is built exclusively around fixed 2D NumPy matrices (`N_individuals × N_variables`). It is rigid, difficult to extend to heterogeneous/nested structures, and forces users into a monolithic `minimize()` loop.
 * **Why not `DEAP`?** `DEAP` relies on 15-year-old untyped metaprogramming (`creator.create`), global mutable state, and lacks modern Python typing.
-* **Where `NeutralSelection` wins:**
+* **Where Neutral Selection wins:**
   1. **Composable Functional Operators:** Every operator is a standalone callable (`strategy(a, b)`) and helper (`recombine`, `mutate`, `select`) usable inside any custom loop, interactive tool, or neural pipeline.
   2. **Heterogeneous & Segmented Genomes:** Native `Segment` support, with per-operator `granularity`, for multi-part chromosomes (e.g., continuous parameters + permutation orders + discrete flags).
   3. **Generative AI & PyTorch Alignment:** First-class ergonomics for PyTorch tensors, NumPy arrays, latent vectors, and model attributes.

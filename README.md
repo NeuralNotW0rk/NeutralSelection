@@ -1,4 +1,4 @@
-# NeutralSelection
+# Neutral Selection
 
 *"If I don't survive, tell my wife, hello."*
 
@@ -9,13 +9,13 @@
 
 ---
 
-## Why NeutralSelection?
+## Why Neutral Selection?
 
 Existing Python evolutionary libraries often fall into two extremes:
 * **`pymoo`** is powerful for multi-objective numerical optimization, but is strictly bound to flat 2D NumPy matrices (`N_individuals × N_variables`). It offers no native ergonomics for nested structures, variable-length sequences, or heterogeneous genomes.
 * **`DEAP`** is flexible, but relies on 15-year-old untyped metaprogramming (`creator.create`), global registries, and lacks modern typing.
 
-**NeutralSelection** bridges this gap. It provides a modular, functional, and strictly-typed toolkit for evolutionary algorithms—designed for everything from classical optimization to **hierarchical genomes, latent space exploration, PyTorch tensor manipulation, and creative generative pipelines**.
+**Neutral Selection** bridges this gap. It provides a modular, functional, and strictly-typed toolkit for evolutionary algorithms—designed for everything from classical optimization to **hierarchical genomes, latent space exploration, PyTorch tensor manipulation, and creative generative pipelines**.
 
 ---
 
