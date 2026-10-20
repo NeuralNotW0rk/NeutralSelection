@@ -9,7 +9,7 @@ The `variation` package implements operators responsible for creating genetic di
 Every operator that handles nested genomes takes a `granularity` argument that sets what counts as one leaf. Operators flatten the genome to a strand of leaves at that scale, operate on the strand, and rebuild the original structure.
 
 | `granularity` | One leaf is | Example on a genome of LoRA genes |
-| :--- | :--- | :--- |
+|---|---|---|
 | `"atom"` (default) | A single scalar: descends into genes, dataclasses and tensors | One weight |
 | `"tensor"` | A whole tensor; everything above tensors is still expanded | One `lora_down` or `lora_up` matrix |
 | `"gene"` | Any item that is not itself a `Genome` or `Segment`, at whatever depth it sits | One `LoRAGene` |
@@ -21,12 +21,12 @@ Positional and callable operators work at every granularity. Numeric operators (
 
 ---
 
-## 1. Parent Selection (`neutral_selection.variation.selection`)
+## Parent selection (`neutral_selection.variation.selection`)
 
 Parent selection operators choose individuals from a population for reproduction based on their relative fitness values.
 
 | Operator | Mechanics & Parameters |
-| :--- | :--- |
+|---|---|
 | `TournamentSelection` | Sub-samples $k$ individuals and selects the best with probability $p$. Parameters: `tournament_size`, `winner_prob`, `minimize`. |
 | `RouletteWheelSelection` | Fitness-proportionate sampling ($p_i \propto f_i$). Parameters: `fitness_offset`, `minimize`. |
 | `StochasticUniversalSamplingSelection` (SUS) | Zero-bias, minimal spread proportionate sampling with equidistant pointers (Baker, 1987). |
@@ -39,12 +39,12 @@ Parent selection operators choose individuals from a population for reproduction
 
 ---
 
-## 2. Recombination (`neutral_selection.variation.recombination`)
+## Recombination (`neutral_selection.variation.recombination`)
 
 Crossover strategies combine genetic material from two parent chromosomes.
 
 | Operator | Type | Description |
-| :--- | :--- | :--- |
+|---|---|---|
 | `OnePointCrossover` | Positional | Single random or fixed split point. |
 | `TwoPointCrossover` | Positional | Swaps slice between two cut points. |
 | `NPointCrossover` / `RandomNPointCrossover` | Positional | Arbitrary $N$-point crossover. |
@@ -60,12 +60,12 @@ Crossover strategies combine genetic material from two parent chromosomes.
 
 ---
 
-## 3. Mutation (`neutral_selection.variation.mutation`)
+## Mutation (`neutral_selection.variation.mutation`)
 
 Mutation strategies introduce novel variations into individual genomes.
 
 | Operator | Domain | Parameters / Notes |
-| :--- | :--- | :--- |
+|---|---|---|
 | `GaussianMutation` | Real-Valued | Adds zero-mean Gaussian noise $\mathcal{N}(0, \sigma^2)$ with optional bounds clamping. |
 | `UniformRealMutation` | Real-Valued | Adds uniform noise in $[-\delta, \delta]$. |
 | `PolynomialMutation` | Real-Valued | NSGA-II polynomial distribution perturbation ($\eta_m$). |

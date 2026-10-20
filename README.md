@@ -2,68 +2,117 @@
 
 *"If I don't survive, tell my wife, hello."*
 
-> **A modern, strictly-typed, and composable evolutionary computation framework for Python.**
+**Neutral Selection** is a strictly typed, composable evolutionary-computation framework for Python. It provides selection, recombination, mutation and replacement operators as standalone callables. It supports hierarchical and heterogeneous genomes, and it handles PyTorch tensors natively. Its range covers classical optimization, latent-space exploration and creative generative pipelines.
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+> **Status:** early alpha (`0.1.0`). The API may change between releases.
+
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
-## Why Neutral Selection?
+## Contents
 
-Existing Python evolutionary libraries often fall into two extremes:
-* **`pymoo`** is powerful for multi-objective numerical optimization, but is strictly bound to flat 2D NumPy matrices (`N_individuals × N_variables`). It offers no native ergonomics for nested structures, variable-length sequences, or heterogeneous genomes.
-* **`DEAP`** is flexible, but relies on 15-year-old untyped metaprogramming (`creator.create`), global registries, and lacks modern typing.
-
-**Neutral Selection** bridges this gap. It provides a modular, functional, and strictly-typed toolkit for evolutionary algorithms—designed for everything from classical optimization to **hierarchical genomes, latent space exploration, PyTorch tensor manipulation, and creative generative pipelines**.
-
----
-
-## Core Value Proposition
-
-* 🧩 **Composable Functional Primitives:** Every operator is a standalone callable (`strategy(parent_a, parent_b)`) and functional helper (`recombine`, `mutate`, `select`, `replace`, `step`). Drop operators directly into any custom loop, interactive tool, or neural pipeline.
-* 🌳 **Heterogeneous & Segmented Genomes:** First-class support for multi-part chromosomes via `Segment`, with every operator's leaf scale set by `granularity` (`"atom"`, `"tensor"`, `"gene"` or a depth). Different sections of a genome can have distinct representations, bounds, mutation rates, and crossover rules.
-* ⚡ **PyTorch & Generative AI Friendly:** Native ergonomics for mutating and blending PyTorch tensors, NumPy arrays, latent vectors, and named model attributes.
-* 🛡️ **Modern Python & Strict Type Safety:** Built from the ground up for Python 3.10+ with comprehensive type annotations, dataclasses, explicit error boundaries, and zero metaprogramming magic.
+- [Why Neutral Selection](#why-neutral-selection)
+- [Installation](#installation)
+- [Core concepts](#core-concepts)
+- [Implemented strategies](#implemented-strategies)
+- [Quickstart](#quickstart)
+- [Scripts and tests](#scripts-and-tests)
+- [Related projects](#related-projects)
+- [References and recommended reading](#references-and-recommended-reading)
+- [License](#license)
 
 ---
 
-## Implemented Strategies
+## Why Neutral Selection
 
-### 1. Variation — Parent Selection (`neutral_selection.variation.selection`)
-* `TournamentSelection`, `RouletteWheelSelection`, `StochasticUniversalSamplingSelection` (SUS), `LinearRankSelection`, `ExponentialRankSelection`, `TruncationSelection`, `ElitistSelection`, `RandomSelection`, `BoltzmannSelection`
-* Functional helper: `select(population, strategy, k)`
+Existing Python evolutionary libraries tend to fall into one of two extremes:
 
-### 2. Variation — Recombination (`neutral_selection.variation.recombination`)
-* **Positional & Structural:** `OnePointCrossover`, `TwoPointCrossover`, `NPointCrossover`, `RandomNPointCrossover`, `UniformCrossover`, `ShuffleCrossover`
-* **Permutation & Order-Preserving:** `OrderCrossover` (OX1), `PartiallyMatchedCrossover` (PMX), `CycleCrossover` (CX)
-* **Real-Valued & Continuous:** `ArithmeticCrossover`, `BlendCrossover` (BLX-$\alpha$), `SimulatedBinaryCrossover` (SBX)
-* **Callable:** `FunctionCrossover` (custom leaf-pair combination at any granularity); `ElementwiseCrossover` is its deprecated gene-scale alias
-* Functional helper: `recombine(parent_a, parent_b, strategy)`
+- **`pymoo`** is powerful for multi-objective numerical optimization, but it is bound to flat 2-D NumPy matrices (`N_individuals × N_variables`). It has no native support for nested structures, variable-length sequences, or heterogeneous genomes.
+- **`DEAP`** is flexible, but it relies on 15-year-old untyped metaprogramming (`creator.create`) and global registries, and it lacks modern typing.
 
-### 3. Variation — Mutation (`neutral_selection.variation.mutation`)
-* **Sequence & Permutation:** `InversionMutation` (2-opt), `SwapMutation`, `ScrambleMutation`, `InsertionMutation`, `TranspositionMutation`, `DuplicationMutation`, `DeletionMutation`
-* **Real-Valued & Continuous:** `GaussianMutation`, `UniformRealMutation`, `PolynomialMutation` (NSGA-II), `CauchyMutation` (Fast EP)
-* **Binary & Discrete:** `BitFlipMutation`, `BoundaryMutation`
-* **Callable:** `FunctionMutation` (custom per-leaf mutation at any granularity); `UniformMutation` is its deprecated gene-scale alias
-* **Mutator helpers:** `gaussian_noise_mutator`, `bit_flip_mutator`, `attribute_mutator`
-* Functional helper: `mutate(genome, strategy)`
+Neutral Selection sits between the two. It is a modular, functional and strictly typed toolkit for evolutionary algorithms. It is designed for everything from classical optimization to **hierarchical genomes, latent-space exploration, PyTorch tensor manipulation, and creative generative pipelines**.
 
-### 4. Environmental Replacement (`neutral_selection.replacement`)
-* `GenerationalReplacement` (Elitism / $(\mu, \lambda)$ with elite retention), `PlusReplacement` $(\mu + \lambda)$, `CommaReplacement` $(\mu, \lambda)$, `SteadyStateReplacement`
-* Functional helper: `replace(parents, offspring, strategy, target_size=None)`
+---
 
-### 5. Evolution Pipeline & Declarative Builders (`neutral_selection.pipeline`, `neutral_selection.builders`, `neutral_selection.registry`)
-* `EvolutionPipeline`: Coordinates parent selection, variation (crossover + mutation), evaluation, and survivor replacement.
-* Functional helper: `step(parents, selection_strategy, ...)`
-* Builders: `build_selection_strategy`, `build_crossover_strategy`, `build_mutation_strategy`, `build_replacement_strategy`, `build_pipeline`
-* Extensible Registries: `@register_selection`, `@register_crossover`, `@register_mutation`, `@register_replacement` for registering custom user strategies seamlessly.
+## Installation
+
+Neutral Selection is not yet published on PyPI. Install it from source:
+
+```bash
+pip install git+https://github.com/NeuralNotW0rk/NeutralSelection.git
+```
+
+or, for development:
+
+```bash
+git clone https://github.com/NeuralNotW0rk/NeutralSelection.git neutral-selection
+cd neutral-selection
+pip install -e .
+```
+
+**Requirements:** Python 3.10, the only version tested so far. The core library has no third-party dependencies. NumPy and PyTorch are used when your genomes contain them.
+
+---
+
+## Core concepts
+
+| Concept | Role |
+|---|---|
+| **Composable functional primitives** | Every operator is a standalone callable (`strategy(parent_a, parent_b)`). Functional helpers (`recombine`, `mutate`, `select`, `replace`, `step`) let you drop operators into any custom loop, interactive tool, or neural pipeline. |
+| **Heterogeneous, segmented genomes** | Multi-part chromosomes are first-class through `Segment`. Each operator's leaf scale is set by `granularity` (`"atom"`, `"tensor"`, `"gene"` or a depth). Different sections of a genome can have their own representation, bounds, mutation rates and crossover rules. |
+| **PyTorch and generative-AI friendly** | Native support for mutating and blending PyTorch tensors, NumPy arrays, latent vectors, and named model attributes. |
+| **Modern Python, strict typing** | Built for Python 3.10, with comprehensive type annotations, dataclasses, explicit error boundaries, and no metaprogramming magic. |
+
+The [variation README](neutral_selection/variation/README.md#granularity) explains granularity in detail.
+
+---
+
+## Implemented strategies
+
+### Parent selection (`neutral_selection.variation.selection`)
+
+- `TournamentSelection`, `RouletteWheelSelection`, `StochasticUniversalSamplingSelection` (SUS), `LinearRankSelection`, `ExponentialRankSelection`, `TruncationSelection`, `ElitistSelection`, `RandomSelection`, `BoltzmannSelection`
+- **Functional helper:** `select(population, strategy, k)`
+
+### Recombination (`neutral_selection.variation.recombination`)
+
+- **Positional and structural:** `OnePointCrossover`, `TwoPointCrossover`, `NPointCrossover`, `RandomNPointCrossover`, `UniformCrossover`, `ShuffleCrossover`
+- **Permutation and order-preserving:** `OrderCrossover` (OX1), `PartiallyMatchedCrossover` (PMX), `CycleCrossover` (CX)
+- **Real-valued and continuous:** `ArithmeticCrossover`, `BlendCrossover` (BLX-$\alpha$), `SimulatedBinaryCrossover` (SBX)
+- **Callable:** `FunctionCrossover` (custom leaf-pair combination at any granularity). `ElementwiseCrossover` is its deprecated gene-scale alias.
+- **Functional helper:** `recombine(parent_a, parent_b, strategy)`
+
+### Mutation (`neutral_selection.variation.mutation`)
+
+- **Sequence and permutation:** `InversionMutation` (2-opt), `SwapMutation`, `ScrambleMutation`, `InsertionMutation`, `TranspositionMutation`, `DuplicationMutation`, `DeletionMutation`
+- **Real-valued and continuous:** `GaussianMutation`, `UniformRealMutation`, `PolynomialMutation` (NSGA-II), `CauchyMutation` (Fast EP)
+- **Binary and discrete:** `BitFlipMutation`, `BoundaryMutation`
+- **Callable:** `FunctionMutation` (custom per-leaf mutation at any granularity). `UniformMutation` is its deprecated gene-scale alias.
+- **Mutator helpers:** `gaussian_noise_mutator`, `bit_flip_mutator`, `attribute_mutator`
+- **Functional helper:** `mutate(genome, strategy)`
+
+### Environmental replacement (`neutral_selection.replacement`)
+
+- `GenerationalReplacement` (elitism, i.e. $(\mu, \lambda)$ with elite retention), `PlusReplacement` $(\mu + \lambda)$, `CommaReplacement` $(\mu, \lambda)$, `SteadyStateReplacement`
+- **Functional helper:** `replace(parents, offspring, strategy, target_size=None)`
+
+### Pipeline and declarative builders (`neutral_selection.pipeline`, `.builders`, `.registry`)
+
+- **`EvolutionPipeline`:** coordinates parent selection, variation (crossover and mutation), evaluation, and survivor replacement.
+- **Functional helper:** `step(parents, selection_strategy, ...)`
+- **Builders:** `build_selection_strategy`, `build_crossover_strategy`, `build_mutation_strategy`, `build_replacement_strategy`, `build_pipeline`
+- **Registries:** `@register_selection`, `@register_crossover`, `@register_mutation` and `@register_replacement` register your own strategies.
+
+Per-operator parameters and formulas are in the [variation](neutral_selection/variation/README.md) and [replacement](neutral_selection/replacement/README.md) READMEs.
 
 ---
 
 ## Quickstart
 
-### 1. Basic Sequence Crossover & Mutation
+### Sequence crossover and mutation
+
 ```python
 from neutral_selection import (
     Genome,
@@ -83,7 +132,8 @@ child_a, child_b = recombine(parent_a, parent_b, TwoPointCrossover())
 mutated_child = mutate(child_a, InversionMutation())
 ```
 
-### 2. Heterogeneous & Segmented Genomes
+### Heterogeneous, segmented genomes
+
 ```python
 from neutral_selection import (
     Genome,
@@ -119,7 +169,8 @@ crossover_fn = lambda s1, s2, _: segment_crossovers[s1.key](s1, s2)[0]
 child_1, child_2 = recombine(parent_1, parent_2, FunctionCrossover(crossover_fn, granularity=1))
 ```
 
-### 3. Parent Selection & Replacement
+### Parent selection and replacement
+
 ```python
 from neutral_selection import (
     Individual,
@@ -148,7 +199,8 @@ next_generation = replace(
 )
 ```
 
-### 4. Full Evolutionary Step
+### Full evolutionary step
+
 ```python
 from neutral_selection import (
     EvolutionPipeline,
@@ -169,9 +221,33 @@ next_gen = pop.step(pipeline=pipeline)
 
 ---
 
-## General References & Recommended Reading
+## Scripts and tests
 
-* **Eiben, A. E., & Smith, J. E. (2015).** *Introduction to Evolutionary Computing* (2nd ed.). Springer. *(Standard comprehensive reference for EA representations and mechanics).*
-* **Deb, K. (2001).** *Multi-Objective Optimization using Evolutionary Algorithms*. John Wiley & Sons. *(Real-parameter genetic algorithms, SBX, and polynomial mutation).*
-* **Rothlauf, F. (2006).** *Representations for Genetic and Evolutionary Algorithms* (2nd ed.). Springer. *(Permutation representations, locality, and schema preservation).*
-* **Luke, S. (2013).** *Essentials of Metaheuristics* (2nd ed.). Lulu / George Mason University. *(Algorithmic definitions and practical operator implementations).*
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## Related projects
+
+- [Diffracture](https://github.com/NeuralNotW0rk/Diffracture): a modular PyTorch library for model interventions (LoRA, DoRA, network bending).
+- [StemmA2A](https://github.com/NeuralNotW0rk/StemmA2A): a desktop workbench that uses Neutral Selection to evolve per-layer LoRA genomes for generative audio and image models.
+
+---
+
+## References and recommended reading
+
+> A. E. Eiben and J. E. Smith. *Introduction to Evolutionary Computing* (2nd ed.). Springer, 2015. The standard comprehensive reference for EA representations and mechanics.
+
+> Kalyanmoy Deb. *Multi-Objective Optimization using Evolutionary Algorithms.* John Wiley & Sons, 2001. Covers real-parameter genetic algorithms, SBX, and polynomial mutation.
+
+> Franz Rothlauf. *Representations for Genetic and Evolutionary Algorithms* (2nd ed.). Springer, 2006. Covers permutation representations, locality, and schema preservation.
+
+> Sean Luke. *Essentials of Metaheuristics* (2nd ed.). Lulu / George Mason University, 2013. Algorithmic definitions and practical operator implementations.
+
+---
+
+## License
+
+Neutral Selection is released under the [MIT License](LICENSE).

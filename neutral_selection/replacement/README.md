@@ -1,13 +1,13 @@
-# Environmental Replacement (`neutral_selection.replacement`)
+# Environmental replacement (`neutral_selection.replacement`)
 
 The `replacement` package implements survivor selection strategies that determine which individuals from the parent generation ($\mu$) and candidate offspring ($\lambda$) survive into the next generation.
 
 ---
 
-## Implemented Strategies
+## Implemented strategies
 
 | Strategy | Formulation | Mechanics & Parameters |
-| :--- | :--- | :--- |
+|---|---|---|
 | `GenerationalReplacement` | $(\mu, \lambda)$ with Elitism | Next generation consists of newly evaluated offspring, retaining the top `num_elites` (or fraction `elite_ratio`) fittest parent individuals unchanged. |
 | `PlusReplacement` | $(\mu + \lambda)$ | Merges parents ($\mu$) and offspring ($\lambda$) into a single pool and selects the top `target_size` fittest individuals. Common in Evolution Strategies. |
 | `CommaReplacement` | $(\mu, \lambda)$ | Completely discards parents; selects survivors strictly from the offspring pool ($\lambda \ge \mu$). |
@@ -15,7 +15,7 @@ The `replacement` package implements survivor selection strategies that determin
 
 ---
 
-## Functional Helper
+## Functional helper
 
 ```python
 from neutral_selection.replacement import replace, GenerationalReplacement
