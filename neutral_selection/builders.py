@@ -236,6 +236,7 @@ def build_pipeline(config: dict[str, Any]) -> EvolutionPipeline:
     crossover_prob = float(config.get("crossover_prob", 1.0))
     mutation_prob = float(config.get("mutation_prob", 1.0))
     evaluate_fn = config.get("evaluate_fn")
+    num_children = int(config.get("num_children", 2))
 
     if replacement_strat is not None:
         elitism = 0
@@ -254,4 +255,5 @@ def build_pipeline(config: dict[str, Any]) -> EvolutionPipeline:
         elite_ratio=elite_ratio,
         evaluate_fn=evaluate_fn,
         replacement_strategy=replacement_strat,
+        num_children=num_children,
     )

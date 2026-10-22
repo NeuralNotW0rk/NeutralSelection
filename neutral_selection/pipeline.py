@@ -36,6 +36,9 @@ class EvolutionPipeline:
         crossover_prob: Probability of applying crossover to a selected parent pair (0.0 to 1.0).
         mutation_prob: Probability of applying mutation to a child genotype (0.0 to 1.0).
         evaluate_fn: Optional fitness evaluation callable (Individual -> float) applied to new offspring.
+        num_children: Children kept from each parent pair, 1 or 2. With 2 (the default) both children a
+            crossover returns are kept; with 1, one of them is kept at random, so a generation is bred
+            from twice as many pairings.
     """
 
     def __init__(
@@ -49,6 +52,7 @@ class EvolutionPipeline:
         elitism: int = 0,
         elite_ratio: Optional[float] = None,
         evaluate_fn: Optional[Callable[[Individual], float]] = None,
+        num_children: int = 2,
     ) -> None:
         if selection_strategy is None:
             raise ValueError("selection_strategy must be provided and cannot be None.")
@@ -80,6 +84,9 @@ class EvolutionPipeline:
         if evaluate_fn is not None and not callable(evaluate_fn):
             raise TypeError("evaluate_fn must be a callable or None.")
 
+        if type(num_children) is not int or num_children not in (1, 2):
+            raise ValueError(f"num_children must be 1 or 2, got {num_children!r}.")
+
         # Resolve replacement strategy
         if replacement_strategy is not None:
             if not isinstance(replacement_strategy, ReplacementStrategy):
@@ -104,6 +111,7 @@ class EvolutionPipeline:
         self.crossover_prob: float = float(crossover_prob)
         self.mutation_prob: float = float(mutation_prob)
         self.evaluate_fn: Optional[Callable[[Individual], float]] = evaluate_fn
+        self.num_children: int = num_children
 
     @property
     def elitism(self) -> int:
@@ -206,13 +214,20 @@ class EvolutionPipeline:
                 child1_genome = copy.deepcopy(p1.genotype)
                 child2_genome = copy.deepcopy(p2.genotype)
 
+            lineage1_parents = [p1_id, p2_id] if crossover_applied else [p1_id]
+            lineage2_parents = [p1_id, p2_id] if crossover_applied else [p2_id]
+            if self.num_children == 1 and child2_genome is not None:
+                # Keeping either child at random stops the first parent from always supplying the leading segment
+                if random.random() < 0.5:
+                    child1_genome, lineage1_parents = child2_genome, lineage2_parents
+                child2_genome = None
+
             # Mutation
             mutated1 = False
             if self.mutation_strategy is not None and random.random() < self.mutation_prob:
                 child1_genome = mutate(child1_genome, strategy=self.mutation_strategy)
                 mutated1 = True
 
-            lineage1_parents = [p1_id, p2_id] if crossover_applied else [p1_id]
             child1 = Individual(
                 genotype=child1_genome,
                 lineage=Lineage(
@@ -231,7 +246,6 @@ class EvolutionPipeline:
                     child2_genome = mutate(child2_genome, strategy=self.mutation_strategy)
                     mutated2 = True
 
-                lineage2_parents = [p1_id, p2_id] if crossover_applied else [p2_id]
                 child2 = Individual(
                     genotype=child2_genome,
                     lineage=Lineage(
@@ -299,6 +313,7 @@ def step(
     elite_ratio: Optional[float] = None,
     evaluate_fn: Optional[Callable[[Individual], float]] = None,
     parent_ids: Optional[Sequence[str]] = None,
+    num_children: int = 2,
 ) -> Population:
     """
     Functional helper to advance an evolutionary population by one step.
@@ -317,6 +332,7 @@ def step(
         elite_ratio: Optional fraction (0.0 to 1.0) of parent population to carry over.
         evaluate_fn: Optional fitness evaluation callable (Individual -> float).
         parent_ids: Optional list of ID strings for lineage tracking.
+        num_children: Children kept from each parent pair, 1 or 2 (see EvolutionPipeline).
 
     Returns:
         A new Population of surviving individuals for the next generation.
@@ -331,6 +347,7 @@ def step(
         elitism=elitism,
         elite_ratio=elite_ratio,
         evaluate_fn=evaluate_fn,
+        num_children=num_children,
     )
     return pipeline.step(
         parents=parents,

@@ -219,6 +219,10 @@ pipeline = EvolutionPipeline(
 next_gen = pop.step(pipeline=pipeline)
 ```
 
+Most crossovers return two complementary children, and the pipeline keeps both by default. Pass
+`num_children=1` to keep one of them at random instead. Each generation then comes from twice as many
+parent pairs, so the number of children per parent varies less in small populations.
+
 ---
 
 ## Scripts and tests

@@ -120,6 +120,57 @@ class TestEvolutionPipeline(unittest.TestCase):
             self.assertFalse(ind.lineage.mutated)
             self.assertEqual(len(ind.lineage.parent_ids), 1)
 
+    def test_num_children_pairs_per_generation(self) -> None:
+        p1 = _make_ind([1.0, 1.0, 1.0, 1.0], fitness=10.0, ind_id="p1")
+        p2 = _make_ind([2.0, 2.0, 2.0, 2.0], fitness=20.0, ind_id="p2")
+        p3 = _make_ind([3.0, 3.0, 3.0, 3.0], fitness=30.0, ind_id="p3")
+        parents = [p1, p2, p3]
+
+        class CountingCrossover(OnePointCrossover):
+            calls = 0
+
+            def __call__(self, parent_a, parent_b):
+                CountingCrossover.calls += 1
+                return super().__call__(parent_a, parent_b)
+
+        for num_children, expected_pairings in ((2, 3), (1, 6)):
+            CountingCrossover.calls = 0
+            offspring_pop = step(
+                parents=parents,
+                selection_strategy=TournamentSelection(tournament_size=2),
+                crossover_strategy=CountingCrossover(),
+                offspring_count=6,
+                parent_ids=["p1", "p2", "p3"],
+                num_children=num_children,
+            )
+            self.assertEqual(len(offspring_pop), 6)
+            self.assertEqual(CountingCrossover.calls, expected_pairings)
+            for ind in offspring_pop:
+                self.assertEqual(len(ind.lineage.parent_ids), 2)
+
+    def test_num_children_one_keeps_either_child(self) -> None:
+        p1 = _make_ind([1.0, 1.0, 1.0], fitness=10.0, ind_id="p1")
+        p2 = _make_ind([2.0, 2.0, 2.0], fitness=0.0, ind_id="p2")
+
+        # A full tournament always draws p1 first, so only the choice of child can vary which parent
+        # supplies the leading element after a cut at 1
+        pipeline = EvolutionPipeline(
+            selection_strategy=TournamentSelection(tournament_size=2),
+            crossover_strategy=OnePointCrossover(cut_point=1),
+            num_children=1,
+        )
+        leading = {
+            pipeline([p1, p2], offspring_count=1, parent_ids=["p1", "p2"])[0].genotype[0]
+            for _ in range(100)
+        }
+        self.assertEqual(leading, {1.0, 2.0})
+
+        # Without crossover, the kept child copies one parent and lists only that parent
+        pipeline.crossover_prob = 0.0
+        for _ in range(20):
+            child = pipeline([p1, p2], offspring_count=1, parent_ids=["p1", "p2"])[0]
+            self.assertEqual(child.lineage.parent_ids, ["p1" if child.genotype[0] == 1.0 else "p2"])
+
     def test_replacement_strategy_integration(self) -> None:
         p1 = _make_ind([1.0], fitness=10.0)
         p2 = _make_ind([2.0], fitness=50.0)
@@ -172,6 +223,14 @@ class TestEvolutionPipeline(unittest.TestCase):
         self.assertIsInstance(pipeline, EvolutionPipeline)
         self.assertEqual(pipeline.crossover_prob, 0.8)
         self.assertEqual(pipeline.elitism, 1)
+
+    def test_num_children_validation_and_builder(self) -> None:
+        selection = TournamentSelection(tournament_size=2)
+        for bad in (0, 3, 1.0, True):
+            with self.assertRaises(ValueError):
+                EvolutionPipeline(selection_strategy=selection, num_children=bad)
+        self.assertEqual(EvolutionPipeline(selection_strategy=selection).num_children, 2)
+        self.assertEqual(build_pipeline({"num_children": 1}).num_children, 1)
 
     def test_fail_fast_validations(self) -> None:
         p1 = _make_ind([1.0], fitness=10.0)
